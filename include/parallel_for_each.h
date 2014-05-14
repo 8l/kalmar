@@ -13,7 +13,7 @@ extern void CompileKernels(void);
 extern void *CreateOkraKernel(std::string);
 extern void OkraLaunchKernel(void *ker, size_t, size_t *global, size_t *local);
 }
-static inline std::string mcw_cxxamp_fixnames(char *f) restrict(cpu,amp) {
+static inline std::string mcw_cxxamp_fixnames(char *f) restrict(cpu) {
     std::string s(f);
     std::string out;
 
@@ -34,11 +34,13 @@ static std::set<std::string> __mcw_cxxamp_kernels;
 template<typename Kernel, int dim_ext>
 static inline void mcw_cxxamp_launch_kernel(size_t *ext,
   size_t *local_size, const Kernel& f) restrict(cpu,amp) {
+#ifndef __GPU__
 #ifdef CXXAMP_ENABLE_HSA_OKRA
   //Invoke Kernel::__cxxamp_trampoline as an HSAkernel
   //to ensure functor has right operator() defined
   //this triggers the trampoline code being emitted
-  int foo = reinterpret_cast<intptr_t>(&Kernel::__cxxamp_trampoline);
+  // FIXME: implicitly casting to avoid pointer to int error
+  int* foo = reinterpret_cast<int*>(&Kernel::__cxxamp_trampoline);
   void *kernel = NULL;
   {
       std::string transformed_kernel_name =
@@ -59,7 +61,8 @@ static inline void mcw_cxxamp_launch_kernel(size_t *ext,
   //Invoke Kernel::__cxxamp_trampoline as an OpenCL kernel
   //to ensure functor has right operator() defined
   //this triggers the trampoline code being emitted
-  int foo = reinterpret_cast<intptr_t>(&Kernel::__cxxamp_trampoline);
+  // FIXME: implicitly casting to avoid pointer to int error
+  int* foo = reinterpret_cast<int*>(&Kernel::__cxxamp_trampoline);
   std::string transformed_kernel_name =
       mcw_cxxamp_fixnames(f.__cxxamp_trampoline_name());
 #if 0
@@ -112,6 +115,7 @@ static inline void mcw_cxxamp_launch_kernel(size_t *ext,
     }
   }
 #endif //CXXAMP_ENABLE_HSA_OKRA
+#endif // __GPU__
 }
 
 template <int N, typename Kernel, typename _Tp>
@@ -156,7 +160,7 @@ __attribute__((noinline,used)) void parallel_for_each(
     for(int i = 0 ; i < N ; i++)
     {
       if(compute_domain[i]<=0)
-        throw runtime_exception("errorMsg_throw", 0);
+        throw invalid_compute_domain("Extent is less or equal than 0.");
     }
 
     size_t ext[3] = {static_cast<size_t>(compute_domain[N - 1]),
@@ -167,7 +171,7 @@ __attribute__((noinline,used)) void parallel_for_each(
 #else
     auto bar = &pfe_wrapper<N, Kernel>::operator();
     auto qq = &index<N>::__cxxamp_opencl_index;
-    int foo = reinterpret_cast<intptr_t>(&pfe_wrapper<N, Kernel>::__cxxamp_trampoline);
+    int* foo = reinterpret_cast<int*>(&pfe_wrapper<N, Kernel>::__cxxamp_trampoline);
 #endif
 }
 
@@ -178,12 +182,15 @@ __attribute__((noinline,used)) void parallel_for_each(
     extent<1> compute_domain,
     const Kernel& f) restrict(cpu,amp) {
 #ifndef __GPU__
+  if(compute_domain[0]<=0) {
+    throw invalid_compute_domain("Extent is less or equal than 0.");
+  }
   size_t ext = compute_domain[0];
   mcw_cxxamp_launch_kernel<Kernel, 1>(&ext, NULL, f);
 #else //ifndef __GPU__
   //to ensure functor has right operator() defined
   //this triggers the trampoline code being emitted
-  int foo = reinterpret_cast<intptr_t>(&Kernel::__cxxamp_trampoline);
+  int* foo = reinterpret_cast<int*>(&Kernel::__cxxamp_trampoline);
 #endif
 }
 
@@ -194,13 +201,16 @@ __attribute__((noinline,used)) void parallel_for_each(
     extent<2> compute_domain,
     const Kernel& f) restrict(cpu,amp) {
 #ifndef __GPU__
+  if(compute_domain[0]<=0 || compute_domain[1]<=0) {
+    throw invalid_compute_domain("Extent is less or equal than 0.");
+  }
   size_t ext[2] = {static_cast<size_t>(compute_domain[1]),
                    static_cast<size_t>(compute_domain[0])};
   mcw_cxxamp_launch_kernel<Kernel, 2>(ext, NULL, f);
 #else //ifndef __GPU__
   //to ensure functor has right operator() defined
   //this triggers the trampoline code being emitted
-  int foo = reinterpret_cast<intptr_t>(&Kernel::__cxxamp_trampoline);
+  int* foo = reinterpret_cast<int*>(&Kernel::__cxxamp_trampoline);
 #endif
 }
 
@@ -211,6 +221,9 @@ __attribute__((noinline,used)) void parallel_for_each(
     extent<3> compute_domain,
     const Kernel& f) restrict(cpu,amp) {
 #ifndef __GPU__
+  if(compute_domain[0]<=0 || compute_domain[1]<=0 || compute_domain[2]<=0) {
+    throw invalid_compute_domain("Extent is less or equal than 0.");
+  }
   size_t ext[3] = {static_cast<size_t>(compute_domain[2]),
                    static_cast<size_t>(compute_domain[1]),
                    static_cast<size_t>(compute_domain[0])};
@@ -218,7 +231,7 @@ __attribute__((noinline,used)) void parallel_for_each(
 #else //ifndef __GPU__
   //to ensure functor has right operator() defined
   //this triggers the trampoline code being emitted
-  int foo = reinterpret_cast<intptr_t>(&Kernel::__cxxamp_trampoline);
+  int* foo = reinterpret_cast<int*>(&Kernel::__cxxamp_trampoline);
 #endif
 }
 
@@ -227,16 +240,22 @@ template <int D0, typename Kernel>
 __attribute__((noinline,used)) void parallel_for_each(
     tiled_extent<D0> compute_domain,
     const Kernel& f) restrict(cpu,amp) {
+#ifndef __GPU__
+  if(compute_domain[0]<=0) {
+    throw invalid_compute_domain("Extent is less or equal than 0.");
+  }
   size_t ext = compute_domain[0];
   size_t tile = compute_domain.tile_dim0;
   static_assert( compute_domain.tile_dim0 <= 1024, "The maximum nuimber of threads in a tile is 1024");
-#ifndef __GPU__
+  if(ext % tile != 0) {
+    throw invalid_compute_domain("Extent can't be evenly divisble by tile size.");
+  }
   mcw_cxxamp_launch_kernel<Kernel, 1>(&ext, &tile, f);
 #else //ifndef __GPU__
   tiled_index<D0> this_is_used_to_instantiate_the_right_index;
   //to ensure functor has right operator() defined
   //this triggers the trampoline code being emitted
-  int foo = reinterpret_cast<intptr_t>(&Kernel::__cxxamp_trampoline);
+  int* foo = reinterpret_cast<int*>(&Kernel::__cxxamp_trampoline);
 #endif
 }
 
@@ -245,18 +264,24 @@ template <int D0, int D1, typename Kernel>
 __attribute__((noinline,used)) void parallel_for_each(
     tiled_extent<D0, D1> compute_domain,
     const Kernel& f) restrict(cpu,amp) {
+#ifndef __GPU__
+  if(compute_domain[0]<=0 || compute_domain[1]<=0) {
+    throw invalid_compute_domain("Extent is less or equal than 0.");
+  }
   size_t ext[2] = { static_cast<size_t>(compute_domain[1]),
                     static_cast<size_t>(compute_domain[0])};
   size_t tile[2] = { compute_domain.tile_dim1,
                      compute_domain.tile_dim0};
   static_assert( (compute_domain.tile_dim1 * compute_domain.tile_dim0)<= 1024, "The maximum nuimber of threads in a tile is 1024");
-#ifndef __GPU__
+  if((ext[0] % tile[0] != 0) || (ext[1] % tile[1] != 0)) {
+    throw invalid_compute_domain("Extent can't be evenly divisble by tile size.");
+  }
   mcw_cxxamp_launch_kernel<Kernel, 2>(ext, tile, f);
 #else //ifndef __GPU__
   tiled_index<D0, D1> this_is_used_to_instantiate_the_right_index;
   //to ensure functor has right operator() defined
   //this triggers the trampoline code being emitted
-  int foo = reinterpret_cast<intptr_t>(&Kernel::__cxxamp_trampoline);
+  int* foo = reinterpret_cast<int*>(&Kernel::__cxxamp_trampoline);
 #endif
 }
  //3D parallel_for_each, tiled
@@ -264,6 +289,10 @@ template <int D0, int D1, int D2, typename Kernel>
 __attribute__((noinline,used)) void parallel_for_each(
     tiled_extent<D0, D1, D2> compute_domain,
     const Kernel& f) restrict(cpu,amp) {
+#ifndef __GPU__
+  if(compute_domain[0]<=0 || compute_domain[1]<=0 || compute_domain[2]<=0) {
+    throw invalid_compute_domain("Extent is less or equal than 0.");
+  }
   size_t ext[3] = { static_cast<size_t>(compute_domain[2]),
                     static_cast<size_t>(compute_domain[1]),
                     static_cast<size_t>(compute_domain[0])};
@@ -271,13 +300,15 @@ __attribute__((noinline,used)) void parallel_for_each(
                      compute_domain.tile_dim1,
                      compute_domain.tile_dim0};
   static_assert(( compute_domain.tile_dim2 * compute_domain.tile_dim1* compute_domain.tile_dim0)<= 1024, "The maximum nuimber of threads in a tile is 1024");
-#ifndef __GPU__
+  if((ext[0] % tile[0] != 0) || (ext[1] % tile[1] != 0) || (ext[2] % tile[2] != 0)) {
+    throw invalid_compute_domain("Extent can't be evenly divisble by tile size.");
+  }
   mcw_cxxamp_launch_kernel<Kernel, 3>(ext, tile, f);
 #else //ifndef __GPU__
   tiled_index<D0, D1, D2> this_is_used_to_instantiate_the_right_index;
   //to ensure functor has right operator() defined
   //this triggers the trampoline code being emitted
-  int foo = reinterpret_cast<intptr_t>(&Kernel::__cxxamp_trampoline);
+  int* foo = reinterpret_cast<int*>(&Kernel::__cxxamp_trampoline);
 #endif
 }
 } // namespace Concurrency
