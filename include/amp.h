@@ -644,7 +644,7 @@ private:
         friend void parallel_for_each(extent<K>, const Y&);
     __attribute__((annotate("__cxxamp_opencl_index")))
         void __cxxamp_opencl_index() restrict(amp,cpu)
-#ifdef __GPU__
+#if defined(__GPU__) && !defined(__CPU_PATH__)
         {
             index_helper<N, index<N>>::set(*this);
         }
