@@ -156,19 +156,36 @@ private:
         friend struct pfe_helper;
 };
 
+template <int N, typename Kernel,  int K>
+struct cpu_helper
+{
+    static inline void call(const Kernel& k, index<K>& idx, extent<K>& ext) restrict(amp,cpu) {
+        int i;
+        for (i = 0; i < ext[N - 1]; ++i) {
+            idx[N - 1] = i;
+            cpu_helper<N - 1, Kernel, K>::call(k, idx, ext);
+        }
+    }
+};
+template <typename Kernel, int K>
+struct cpu_helper<0, Kernel, K>
+{
+    static inline void call(const Kernel& k, index<K>& idx, extent<K>& ext) restrict(amp,cpu) {
+        k(idx);
+    }
+};
+
+
 #ifdef __CPU_PATH__
 template <int N, typename Kernel>
 __attribute__((noinline, used)) void parallel_for_each(
     extent<N> compute_domain, const Kernel& f) restrict(cpu, amp) {
 #ifndef __GPU__
-    pfe_wrapper<N, Kernel> _pf(compute_domain, f);
     index<N> idx;
-    _pf(idx);
+    cpu_helper<N, Kernel, N>::call(f, idx, compute_domain);
 #else
     auto bar = &pfe_wrapper<N, Kernel>::operator();
     int* foo = reinterpret_cast<int*>(&pfe_wrapper<N, Kernel>::__cxxamp_trampoline);
-    typedef void (Kernel::*ker_ptr)(index<N>) const;
-    ker_ptr XX = reinterpret_cast<ker_ptr>(&Kernel::operator());
 #endif
 }
 
