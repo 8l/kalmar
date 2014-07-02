@@ -663,6 +663,38 @@ private:
 #endif
 
 // C++AMP LPM 4.5
+#ifdef __CPU_PATH__
+struct barrier_t {
+    std::atomic<size_t> count;
+    std::atomic<size_t> space;
+    std::atomic<size_t> generation;
+    void set(size_t count_) {
+        count = count_;
+        space = count_;
+        generation = 0;
+    }
+    void wait()
+    {
+        size_t const gen = generation.load();
+        if (!--space) {
+            space = count.load();
+            ++generation;
+        } else {
+            while (generation.load() == gen)
+                std::this_thread::yield();
+        }
+    }
+} amp_bar;
+class tile_barrier {
+public:
+    void wait() const restrict(cpu, amp) {
+        amp_bar.wait();
+    }
+private:
+    template<int D0, int D1, int D2>
+        friend class tiled_index;
+};
+#else
 class tile_barrier {
  public:
   tile_barrier(const tile_barrier& other) restrict(amp,cpu) {}
@@ -691,6 +723,7 @@ class tile_barrier {
   template<int D0, int D1, int D2>
   friend class tiled_index;
 };
+#endif
 
 template <typename T, int N> class array;
 template <typename T, int N> class array_view;
