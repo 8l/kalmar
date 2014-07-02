@@ -24,7 +24,7 @@
 #include <chrono>
 #include <future>
 #include <string.h> //memcpy
-#ifndef CXXAMP_ENABLE_HSA_OKRA
+#if !defined(CXXAMP_ENABLE_HSA_OKRA) && !defined(__CPU_PATH__)
 #include <gmac/opencl.h>
 #endif
 #include <memory>
@@ -155,7 +155,7 @@ public:
   accelerator(const accelerator& other);
   static std::vector<accelerator> get_all() {
     std::vector<accelerator> acc;
-#ifndef CXXAMP_ENABLE_HSA_OKRA
+#if !defined(CXXAMP_ENABLE_HSA_OKRA) && !defined(__CPU_PATH__)
     AcceleratorInfo accInfo;
     for (unsigned i = 0; i < eclGetNumberOfAccelerators(); i++) {
       assert(eclGetAcceleratorInfo(i, &accInfo) == eclSuccess);
@@ -217,7 +217,7 @@ public:
   size_t dedicated_memory;
   access_type default_access_type;
   std::shared_ptr<accelerator_view> default_view;
-#ifndef CXXAMP_ENABLE_HSA_OKRA
+#if !defined(CXXAMP_ENABLE_HSA_OKRA) && !defined(__CPU_PATH__)
   typedef GmacAcceleratorInfo AcceleratorInfo;
   AcceleratorInfo accInfo;
 #endif
@@ -879,8 +879,8 @@ class tiled_index {
   static const int tile_dim2 = D2;
  private:
   //CLAMP
-  tiled_index() (int a0, int a1, int a2, int b0, int b1, int b2,
-                 int c0, int c1, int c2) restrict(amp,cpu)
+  tiled_index(int a0, int a1, int a2, int b0, int b1, int b2,
+              int c0, int c1, int c2) restrict(amp,cpu)
       : global(a2, a1, a0), local(b2, b1, b0), tile(c2, c1, c0),
       tile_origin(a2 - b2, a1 - b1, a0 - b0), tile_extent(D0, D1, D2) {}
   __attribute__((annotate("__cxxamp_opencl_index")))
@@ -1079,6 +1079,10 @@ public:
 //include okra-specific files here
 } //namespace Concurrency
 #include "okra_manage.h"
+namespace Concurrency {
+#elif __CPU_PATH__
+} //namespace Concurrency
+#include "cpu_manage.h"
 namespace Concurrency {
 #else
 #include "gmac_manage.h"

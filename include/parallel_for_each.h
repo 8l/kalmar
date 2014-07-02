@@ -10,6 +10,7 @@
 #include <amp.h>
 
 namespace Concurrency {
+#ifndef __CPU_PATH__
 namespace CLAMP {
 extern void MatchKernelNames( std::string & );
 extern void CompileKernels(void);
@@ -120,6 +121,7 @@ static inline void mcw_cxxamp_launch_kernel(size_t *ext,
 #endif //CXXAMP_ENABLE_HSA_OKRA
 #endif // __GPU__
 }
+#else // __CPU_PATH__
 
 template <int N, typename Kernel, typename _Tp>
 struct pfe_helper
@@ -409,4 +411,5 @@ __attribute__((noinline,used)) void parallel_for_each(
   int* foo = reinterpret_cast<int*>(&Kernel::__cxxamp_trampoline);
 #endif
 }
+#endif // __CPU_PATH__
 } // namespace Concurrency

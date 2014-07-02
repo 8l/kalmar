@@ -24,6 +24,7 @@ namespace {
 bool __mcw_cxxamp_compiled = false;
 }
 
+#ifndef __CPU_PATH__
 #ifdef __APPLE__
 #include <mach-o/getsect.h>
 extern "C" intptr_t _dyld_get_image_vmaddr_slide(uint32_t image_index);
@@ -258,3 +259,4 @@ void OkraPushPointer(void *ker, void *val)
 #endif
 } // namespace CLAMP
 } // namespace Concurrency
+#endif

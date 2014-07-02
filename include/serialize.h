@@ -14,6 +14,13 @@ extern void OkraPushArg(void *, size_t, const void *);
 extern void OkraPushPointer(void *, void *);
 }
 #endif
+#ifdef __CPU_PATH__
+class Serialize {
+public:
+  void Append(size_t sz, const void *s) {}
+  void AppendPtr(const void *ptr) {}
+};
+#else
 class Serialize {
  public:
 #ifdef CXXAMP_ENABLE_HSA_OKRA
@@ -48,4 +55,5 @@ class Serialize {
 #endif
   int current_idx_;
 };
+#endif
 }
