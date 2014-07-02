@@ -180,15 +180,9 @@ struct cpu_helper<0, Kernel, K>
 template <int N, typename Kernel>
 __attribute__((noinline, used)) void parallel_for_each(
     extent<N> compute_domain, const Kernel& f) restrict(cpu, amp) {
-#ifndef __GPU__
     index<N> idx;
     cpu_helper<N, Kernel, N>::call(f, idx, compute_domain);
-#else
-    auto bar = &pfe_wrapper<N, Kernel>::operator();
-    int* foo = reinterpret_cast<int*>(&pfe_wrapper<N, Kernel>::__cxxamp_trampoline);
-#endif
 }
-
 #else
 
 template <int N, typename Kernel>
