@@ -22,10 +22,10 @@ class myVecAdd {
     Concurrency::array<int, 2> &c):
     a_(a), b_(b), c_(c) {
   }
-  void operator() (Concurrency::index<2> idx) restrict(amp) {
+  void operator() (Concurrency::index<2> idx) const restrict(amp) {
     c_[idx] = a_[idx]+b_[idx];
   }
-  void operator() (Concurrency::tiled_index<4, 4> idx) restrict(amp) {
+  void operator() (Concurrency::tiled_index<4, 4> idx) const restrict(amp) {
     c_[idx] = a_[idx]+b_[idx];
   }
  private:

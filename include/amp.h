@@ -879,6 +879,10 @@ class tiled_index {
   static const int tile_dim2 = D2;
  private:
   //CLAMP
+  tiled_index() (int a0, int a1, int a2, int b0, int b1, int b2,
+                 int c0, int c1, int c2) restrict(amp,cpu)
+      : global(a2, a1, a0), local(b2, b1, b0), tile(c2, c1, c0),
+      tile_origin(a2 - b2, a1 - b1, a0 - b0), tile_extent(D0, D1, D2) {}
   __attribute__((annotate("__cxxamp_opencl_index")))
   __attribute__((always_inline)) tiled_index() restrict(amp)
 #ifdef __GPU__
@@ -916,6 +920,8 @@ class tiled_index<D0, 0, 0> {
   static const int tile_dim0 = D0;
  private:
   //CLAMP
+  __attribute__((always_inline)) tiled_index(int a, int b, int c) restrict(amp, cpu)
+  : global(a), local(b), tile(c), tile_origin(a - b), tile_extent(D0) {}
   __attribute__((annotate("__cxxamp_opencl_index")))
   __attribute__((always_inline)) tiled_index() restrict(amp)
 #ifdef __GPU__
@@ -952,6 +958,8 @@ class tiled_index<D0, D1, 0> {
   static const int tile_dim1 = D1;
  private:
   //CLAMP
+  tiled_index(int a0, int a1, int b0, int b1, int c0, int c1) restrict(amp, cpu)
+      : global(a1, a0), local(b1, b0), tile(c1, c0), tile_origin(a1 - b1, a0 - b0), tile_extent(D0, D1) {}
   __attribute__((annotate("__cxxamp_opencl_index")))
   __attribute__((always_inline)) tiled_index() restrict(amp)
 #ifdef __GPU__
