@@ -357,11 +357,24 @@ __attribute__((noinline,used)) void parallel_for_each(
     throw invalid_compute_domain("Extent can't be evenly divisble by tile size.");
   }
 #ifdef __CPU_PATH__
-  for (int i = 0; i < ext[0]; i++)
-      for (int j = 0; j < ext[1]; j++) {
-          tiled_index<D0, D1> tidx(i, j, i % tile[0], j % tile[1], i / tile[0], j / tile[1]);
-          f(tidx);
-      }
+    for (int tx = 0; tx < ext[0] / tile[0]; tx++)
+        for (int ty = 0; ty < ext[1] / tile[1]; ty++) {
+            std::thread t[D0][D1];
+            amp_bar.set(D0 * D1);
+            for (int x = 0; x < tile[0]; x++)
+                for (int y = 0; y < tile[1]; y++) {
+                    tiled_index<D0, D1> tidx(D0 * tx + x, D1 * ty + ty, tx, ty, x, y);
+                    t[x][y] = std::thread(f, tidx);
+                }
+            for (int x = 0; x < tile[0]; x++)
+                for (int y = 0; y < tile[1]; y++)
+                    t[x][y].join();
+        }
+  // for (int i = 0; i < ext[0]; i++)
+  //     for (int j = 0; j < ext[1]; j++) {
+  //         tiled_index<D0, D1> tidx(i, j, i % tile[0], j % tile[1], i / tile[0], j / tile[1]);
+  //         f(tidx);
+  //     }
 #else
   mcw_cxxamp_launch_kernel<Kernel, 2>(ext, tile, f);
 #endif
