@@ -211,6 +211,8 @@ __attribute__((noinline,used)) void parallel_for_each(
 #endif
 }
 
+#ifndef __CPU_PATH__
+
 template class index<1>;
 //1D parallel_for_each, nontiled
 template <typename Kernel>
@@ -224,12 +226,7 @@ __attribute__((noinline,used)) void parallel_for_each(
   if (static_cast<size_t>(compute_domain[0]) > 4294967295L) 
     throw invalid_compute_domain("Extent size too large.");
   size_t ext = compute_domain[0];
-#ifdef __CPU_PATH__
-    index<1> idx;
-    cpu_helper<1, Kernel, 1>::call(f, idx, compute_domain);
-#else
     mcw_cxxamp_launch_kernel<pfe_wrapper<N, Kernel>, 3>(ext, NULL, _pf);
-#endif
 #else //ifndef __GPU__
   //to ensure functor has right operator() defined
   //this triggers the trampoline code being emitted
@@ -251,12 +248,7 @@ __attribute__((noinline,used)) void parallel_for_each(
     throw invalid_compute_domain("Extent size too large.");
   size_t ext[2] = {static_cast<size_t>(compute_domain[1]),
                    static_cast<size_t>(compute_domain[0])};
-#ifdef __CPU_PATH__
-    index<2> idx;
-    cpu_helper<2, Kernel, 2>::call(f, idx, compute_domain);
-#else
     mcw_cxxamp_launch_kernel<pfe_wrapper<N, Kernel>, 3>(ext, NULL, _pf);
-#endif
 #else //ifndef __GPU__
   //to ensure functor has right operator() defined
   //this triggers the trampoline code being emitted
@@ -285,18 +277,14 @@ __attribute__((noinline,used)) void parallel_for_each(
   size_t ext[3] = {static_cast<size_t>(compute_domain[2]),
                    static_cast<size_t>(compute_domain[1]),
                    static_cast<size_t>(compute_domain[0])};
-#ifdef __CPU_PATH__
-    index<3> idx;
-    cpu_helper<3, Kernel, 3>::call(f, idx, compute_domain);
-#else
     mcw_cxxamp_launch_kernel<pfe_wrapper<N, Kernel>, 3>(ext, NULL, _pf);
-#endif
 #else //ifndef __GPU__
   //to ensure functor has right operator() defined
   //this triggers the trampoline code being emitted
   int* foo = reinterpret_cast<int*>(&Kernel::__cxxamp_trampoline);
 #endif
 }
+#endif
 
 //1D parallel_for_each, tiled
 template <int D0, typename Kernel>
