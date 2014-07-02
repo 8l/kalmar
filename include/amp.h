@@ -1078,6 +1078,112 @@ namespace Concurrency {
 template <typename T, int N>
 struct projection_helper
 {
+    // array_view<T,N>, where N>1
+    //    array_view<T,N-1> operator[](int i) const restrict(amp,cpu)
+    static_assert(N > 1, "projection_helper is only supported on array_view with a rank of 2 or higher");
+    typedef array_view<T, N - 1> result_type;
+    static result_type project(array_view<T, N>& now, int stride) restrict(amp,cpu) {
+        int ext[N - 1], i, idx[N - 1], ext_o[N - 1];
+        for (i = N - 1; i > 0; --i) {
+            ext_o[i - 1] = now.extent[i];
+            ext[i - 1] = now.extent_base[i];
+            idx[i - 1] = now.index_base[i];
+    }
+        stride += now.index_base[0];
+        Concurrency::extent<N - 1> ext_now(ext_o);
+        Concurrency::extent<N - 1> ext_base(ext);
+        Concurrency::index<N - 1> idx_base(idx);
+        return result_type (ext_now, ext_base, idx_base, now.cache,
+                                now.p_, now.offset + ext_base.size() * stride);
+    }
+    static result_type project(const array_view<T, N>& now, int stride) restrict(amp,cpu) {
+        int ext[N - 1], i, idx[N - 1], ext_o[N - 1];
+        for (i = N - 1; i > 0; --i) {
+            ext_o[i - 1] = now.extent[i];
+            ext[i - 1] = now.extent_base[i];
+            idx[i - 1] = now.index_base[i];
+        }
+        stride += now.index_base[0];
+        Concurrency::extent<N - 1> ext_now(ext_o);
+        Concurrency::extent<N - 1> ext_base(ext);
+        Concurrency::index<N - 1> idx_base(idx);
+        return result_type (ext_now, ext_base, idx_base, now.cache,
+                                now.p_, now.offset + ext_base.size() * stride);
+    }
+};
+template <typename T>
+struct projection_helper<T, 1>
+{
+    // array_view<T,1>
+    //      T& operator[](int i) const restrict(amp,cpu);
+    typedef __global T& result_type;
+    static result_type project(array_view<T, 1>& now, int i) restrict(amp,cpu) {
+        __global T *ptr = reinterpret_cast<__global T *>(now.cache.get() + i + now.offset + now.index_base[0]);
+        return *ptr;
+    }
+    static result_type project(const array_view<T, 1>& now, int i) restrict(amp,cpu) {
+        __global T *ptr = reinterpret_cast<__global T *>(now.cache.get() + i + now.offset + now.index_base[0]);
+        return *ptr;
+    }
+};
+template <typename T, int N>
+struct projection_helper<const T, N>
+{
+    // array_view<T,N>, where N>1
+    //    array_view<const T,N-1> operator[](int i) const restrict(amp,cpu);
+    static_assert(N > 1, "projection_helper is only supported on array_view with a rank of 2 or higher");
+    typedef array_view<const T, N - 1> const_result_type;
+    static const_result_type project(array_view<const T, N>& now, int stride) restrict(amp,cpu) {
+        int ext[N - 1], i, idx[N - 1], ext_o[N - 1];
+        for (i = N - 1; i > 0; --i) {
+            ext_o[i - 1] = now.extent[i];
+            ext[i - 1] = now.extent_base[i];
+            idx[i - 1] = now.index_base[i];
+        }
+        stride += now.index_base[0];
+        Concurrency::extent<N - 1> ext_now(ext_o);
+        Concurrency::extent<N - 1> ext_base(ext);
+        Concurrency::index<N - 1> idx_base(idx);
+        return const_result_type (ext_now, ext_base, idx_base, now.cache,
+                                now.p_, now.offset + ext_base.size() * stride);
+    }
+    static const_result_type project(const array_view<const T, N>& now, int stride) restrict(amp,cpu) {
+        int ext[N - 1], i, idx[N - 1], ext_o[N - 1];
+        for (i = N - 1; i > 0; --i) {
+            ext_o[i - 1] = now.extent[i];
+            ext[i - 1] = now.extent_base[i];
+            idx[i - 1] = now.index_base[i];
+        }
+        stride += now.index_base[0];
+        Concurrency::extent<N - 1> ext_now(ext_o);
+        Concurrency::extent<N - 1> ext_base(ext);
+        Concurrency::index<N - 1> idx_base(idx);
+        return const_result_type (ext_now, ext_base, idx_base, now.cache,
+                                now.p_, now.offset + ext_base.size() * stride);
+    }
+};
+template <typename T>
+struct projection_helper<const T, 1>
+{
+    // array_view<const T,1>
+    //      const T& operator[](int i) const restrict(amp,cpu);
+    typedef __global const T& const_result_type;
+    static const_result_type project(array_view<const T, 1>& now, int i) restrict(amp,cpu) {
+        __global const T *ptr = reinterpret_cast<__global const T *>(now.cache.get() + i + now.offset + now.index_base[0]);
+        return *ptr;
+    }
+    static const_result_type project(const array_view<const T, 1>& now, int i) restrict(amp,cpu) {
+        __global const T *ptr = reinterpret_cast<__global const T *>(now.cache.get() + i + now.offset + now.index_base[0]);
+        return *ptr;
+    }
+};
+template <typename T, int N>
+struct array_projection_helper
+{
+    // array<T,N>, where N>1
+    //     array_view<T,N-1> operator[](int i0) restrict(amp,cpu);
+    //     array_view<const T,N-1> operator[](int i0) const restrict(amp,cpu);
+    static_assert(N > 1, "projection_helper is only supported on array with a rank of 2 or higher");
     typedef array_view<T, N - 1> result_type;
     typedef array_view<const T, N - 1> const_result_type;
     static result_type project(array<T, N>& now, int stride) restrict(amp,cpu) {
@@ -1094,10 +1200,9 @@ struct projection_helper
         if( offset >= now.extent.size())
           throw runtime_exception("errorMsg_throw", 0);
 #endif
-        array_view<T, N - 1> av(ext, ext, index<N - 1>(), now.m_device, now.data(), offset);
-        return av;
+        return result_type(ext, ext, index<N - 1>(), now.m_device, now.data(), offset);
     }
-    static const_result_type project(const array<const T, N>& now, int stride) restrict(amp,cpu) {
+    static const_result_type project(const array<T, N>& now, int stride) restrict(amp,cpu) {
         int comp[N - 1], i;
         for (i = N - 1; i > 0; --i)
             comp[i - 1] = now.extent[i];
@@ -1105,38 +1210,21 @@ struct projection_helper
         int offset = ext.size() * stride;
         return const_result_type(ext, ext, index<N - 1>(), now.m_device, now.data(), offset);
     }
-    static result_type project(const array_view<T, N>& now, int stride) restrict(amp,cpu) {
-        int ext[N - 1], i, idx[N - 1], ext_o[N - 1];
-        for (i = N - 1; i > 0; --i) {
-            ext_o[i - 1] = now.extent[i];
-            ext[i - 1] = now.extent_base[i];
-            idx[i - 1] = now.index_base[i];
-        }
-        stride += now.index_base[0];
-        Concurrency::extent<N - 1> ext_now(ext_o);
-        Concurrency::extent<N - 1> ext_base(ext);
-        Concurrency::index<N - 1> idx_base(idx);
-        array_view<T, N - 1> av(ext_now, ext_base, idx_base, now.cache,
-                                now.p_, now.offset + ext_base.size() * stride);
-        return av;
-    }
 };
-
 template <typename T>
-struct projection_helper<T, 1>
+struct array_projection_helper<T, 1>
 {
+    // array<T,1>
+    //    T& operator[](int i0) restrict(amp,cpu);
+    //    const T& operator[](int i0) const restrict(amp,cpu);
     typedef __global T& result_type;
     typedef __global const T& const_result_type;
     static result_type project(array<T, 1>& now, int i) restrict(amp,cpu) {
         __global T *ptr = reinterpret_cast<__global T *>(now.m_device.get() + i);
         return *ptr;
     }
-    static const_result_type& project(const array<T, 1>& now, int i) restrict(amp,cpu) {
+    static const_result_type project(const array<T, 1>& now, int i) restrict(amp,cpu) {
         __global const T *ptr = reinterpret_cast<__global const T *>(now.m_device.get() + i);
-        return *ptr;
-    }
-    static result_type& project(const array_view<T, 1>& now, int i) restrict(amp,cpu) {
-        __global T *ptr = reinterpret_cast<__global T *>(now.cache.get() + i + now.offset + now.index_base[0]);
         return *ptr;
     }
 };
@@ -1164,6 +1252,7 @@ private:
 
 template <typename T, int N = 1>
 class array {
+  static_assert(!std::is_const<T>::value, "array<const T> is not supported");
   static_assert(0 == (sizeof(T) % sizeof(int)), "only value types whose size is a multiple of the size of an integer are allowed in array");
 public:
 #ifdef __GPU__
@@ -1357,13 +1446,13 @@ public:
       return ptr[amp_helper<N, index<N>, Concurrency::extent<N> >::flatten(idx, extent)];
   }
 
-  typename projection_helper<T, N>::result_type
+  typename array_projection_helper<T, N>::result_type
       operator[] (int i) restrict(amp,cpu) {
-          return projection_helper<T, N>::project(*this, i);
+          return array_projection_helper<T, N>::project(*this, i);
       }
-  typename projection_helper<T, N>::const_result_type
+  typename array_projection_helper<T, N>::const_result_type
       operator[] (int i) const restrict(amp,cpu) {
-          return projection_helper<const T, N>::project(*this, i);
+          return array_projection_helper<T, N>::project(*this, i);
       }
 
   __global T& operator()(const index<N>& idx) restrict(amp,cpu) {
@@ -1372,13 +1461,20 @@ public:
   __global const T& operator()(const index<N>& idx) const restrict(amp,cpu) {
     return (*this)[idx];
   }
-  typename projection_helper<T, N>::result_type
+  typename array_projection_helper<T, N>::result_type
       operator()(int i0) restrict(amp,cpu) {
           return (*this)[i0];
   }
+  typename array_projection_helper<T, N>::const_result_type
+      operator()(int i0) const restrict(amp,cpu) {
+          return (*this)[i0];
+  }
+  // Duplicated codes
+  #if 0
   __global const T& operator()(int i0) const restrict(amp,cpu) {
       return (*this)[i0];
   }
+  #endif
   __global T& operator()(int i0, int i1) restrict(amp,cpu) {
       return (*this)[index<2>(i0, i1)];
   }
@@ -1521,6 +1617,7 @@ private:
   template <int K, typename Q> friend struct index_helper;
   template <int K, typename Q1, typename Q2> friend struct amp_helper;
   template <typename K, int Q> friend struct projection_helper;
+  template <typename K, int Q> friend struct array_projection_helper;
   template <typename K, int Q> friend class array_helper;
   gmac_buffer_t m_device;
   access_type cpu_access_type;
@@ -1571,7 +1668,8 @@ public:
 
   template <typename Container, class = typename std::enable_if<!std::is_array<Container>::value>::type>
       array_view(const Concurrency::extent<N>& extent, Container& src)
-      : array_view(extent, src.data()) {}
+      : array_view(extent, src.data())
+  { static_assert( std::is_same<decltype(src.data()), T*>::value, "container element type and array view element type must match"); }
   template <typename Container, class = typename std::enable_if<!std::is_array<Container>::value>::type>
       array_view(int e0, Container& src)
       : array_view(Concurrency::extent<1>(e0), src)
@@ -1688,7 +1786,7 @@ public:
   }
   typename projection_helper<T, N>::result_type
       operator()(int i0) const restrict(amp,cpu) {
-          return (*this)[index<1>(i0)];
+          return (*this)[i0];
   }
   __global T& operator()(int i0, int i1) const restrict(amp,cpu) {
       static_assert(N == 2, "T& array_view::operator()(int,int) is only permissible on array_view<T, 2>");
@@ -1789,6 +1887,7 @@ private:
   template <int K, typename Q> friend struct index_helper;
   template <int K, typename Q1, typename Q2> friend struct amp_helper;
   template <typename K, int Q> friend struct projection_helper;
+  template <typename K, int Q> friend struct array_projection_helper;
   template <typename Q, int K> friend class array;
   template <typename Q, int K> friend class array_view;
 
@@ -1842,7 +1941,8 @@ public:
         index_base(), extent_base(src.extent) {}
   template <typename Container, class = typename std::enable_if<!std::is_array<Container>::value && !std::is_pointer<Container>::value>::type>
     array_view(const extent<N>& extent, const Container& src)
-        : array_view(extent, src.data()) {}
+        : array_view(extent, src.data())
+  { static_assert( std::is_same<typename std::remove_const<typename std::remove_reference<decltype(*src.data())>::type>::type, T>::value, "container element type and array view element type must match"); }
     template <typename Container, class = typename std::enable_if<!std::is_array<Container>::value>::type>
       array_view(int e0, Container& src)
       : array_view(Concurrency::extent<1>(e0), src)
@@ -1915,7 +2015,7 @@ public:
     return ptr[amp_helper<N, index<N>, Concurrency::extent<N>>::flatten(idx + index_base, extent_base)];
   }
 
-  typename projection_helper<const T, N>::result_type
+  typename projection_helper<const T, N>::const_result_type
       operator[] (int i) const restrict(amp,cpu) {
     return projection_helper<const T, N>::project(*this, i);
   }
@@ -2024,6 +2124,7 @@ private:
   template <int K, typename Q> friend struct index_helper;
   template <int K, typename Q1, typename Q2> friend struct amp_helper;
   template <typename K, int Q> friend struct projection_helper;
+  template <typename K, int Q> friend struct array_projection_helper;
   template <typename Q, int K> friend class array;
   template <typename Q, int K> friend class array_view;
 
@@ -2371,40 +2472,37 @@ completion_future copy_async(const array_view<T, N>& src, OutputIter destBegin) 
 }
 
 #ifdef __GPU__
-extern "C" unsigned atomic_add_local(volatile __attribute__((address_space(3))) unsigned *p, unsigned val) restrict(amp);
+extern "C" unsigned atomic_add_unsigned(unsigned *p, unsigned val) restrict(amp);
+extern "C" int atomic_add_int(int *p, int val) restrict(amp);
 static inline unsigned atomic_fetch_add(unsigned *x, unsigned y) restrict(amp,cpu) { 
-  return atomic_add_local(reinterpret_cast<volatile __attribute__((address_space(3))) unsigned *>(x), y);
+  return atomic_add_unsigned(x, y);
+}
+static inline int atomic_fetch_add(int *x, int y) restrict(amp,cpu) {
+  return atomic_add_int(x, y);
 }
 #else
 extern unsigned atomic_fetch_add(unsigned *x, unsigned y) restrict(amp,cpu);
-#endif
-
-#ifdef __GPU__
-extern "C" int atomic_add_global(volatile __attribute__((address_space(1))) int *p, int val) restrict(amp);
-static inline int atomic_fetch_add(int *x, int y) restrict(amp,cpu) {
-  return atomic_add_global(reinterpret_cast<volatile __attribute__((address_space(1))) int *>(x), y);
-}
-#else
 extern int atomic_fetch_add(int *x, int y) restrict(amp, cpu);
 #endif
 
 #ifdef __GPU__
-extern "C" unsigned atomic_max_local(volatile __attribute__((address_space(3))) unsigned *p, unsigned val) restrict(amp);
-extern "C" int atomic_max_global(volatile __attribute__((address_space(1))) int *p, int val) restrict(amp);
-static inline unsigned atomic_fetch_max(unsigned *x, unsigned y) restrict(amp,cpu) {
-  return atomic_max_local(reinterpret_cast<volatile __attribute__((address_space(3))) unsigned *>(x), y);
+extern "C" unsigned atomic_max_unsigned(unsigned *p, unsigned val) restrict(amp);
+extern "C" int atomic_max_int(int *p, int val) restrict(amp);
+
+static inline unsigned atomic_fetch_max(unsigned *x, unsigned y) restrict(amp) {
+  return atomic_max_unsigned(x, y);
 }
-static inline int atomic_fetch_max(int *x, int y) restrict(amp,cpu) {
-  return atomic_max_global(reinterpret_cast<volatile __attribute__((address_space(1))) int *>(x), y);
+static inline int atomic_fetch_max(int *x, int y) restrict(amp) {
+  return atomic_max_int(x, y);
 }
 
-extern "C" unsigned atomic_inc_local(volatile __attribute__((address_space(3))) unsigned *p) restrict(amp);
-extern "C" int atomic_inc_global(volatile __attribute__((address_space(1))) int *p) restrict(amp);
+extern "C" unsigned atomic_inc_unsigned(unsigned *p) restrict(amp);
+extern "C" int atomic_inc_int(int *p) restrict(amp);
 static inline unsigned atomic_fetch_inc(unsigned *x) restrict(amp,cpu) {
-  return atomic_inc_local(reinterpret_cast<volatile __attribute__((address_space(3))) unsigned *>(x));
+  return atomic_inc_unsigned(x);
 }
 static inline int atomic_fetch_inc(int *x) restrict(amp,cpu) {
-  return atomic_inc_global(reinterpret_cast<volatile __attribute__((address_space(1))) int *>(x));
+  return atomic_inc_int(x);
 }
 #else
 
