@@ -669,9 +669,13 @@ private:
 #ifdef __CPU_PATH__
 struct barrier_t {
     size_t count, restart;
-    jmp_buf *buf_list, pfe;
+    std::jmp_buf *buf_list;
+    std::jmp_buf pfe;
+    barrier_t () {
+        buf_list = NULL;
+    }
     void set(int count_) {
-        if (buf_list) 
+        if (buf_list)
             delete [] buf_list;
         buf_list = new jmp_buf[count_];
         count = 0;
