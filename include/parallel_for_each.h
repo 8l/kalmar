@@ -211,8 +211,6 @@ __attribute__((noinline,used)) void parallel_for_each(
 #endif
 }
 
-#ifndef __CPU_PATH__
-
 template class index<1>;
 //1D parallel_for_each, nontiled
 template <typename Kernel>
@@ -226,7 +224,12 @@ __attribute__((noinline,used)) void parallel_for_each(
   if (static_cast<size_t>(compute_domain[0]) > 4294967295L) 
     throw invalid_compute_domain("Extent size too large.");
   size_t ext = compute_domain[0];
-    mcw_cxxamp_launch_kernel<pfe_wrapper<N, Kernel>, 3>(ext, NULL, _pf);
+#ifdef __CPU_PATH__
+    index<1> idx;
+    cpu_helper<1, Kernel, 1>::call(f, idx, compute_domain);
+#else
+    mcw_cxxamp_launch_kernel<Kernel, 1>(ext, NULL, f);
+#endif
 #else //ifndef __GPU__
   //to ensure functor has right operator() defined
   //this triggers the trampoline code being emitted
@@ -248,7 +251,12 @@ __attribute__((noinline,used)) void parallel_for_each(
     throw invalid_compute_domain("Extent size too large.");
   size_t ext[2] = {static_cast<size_t>(compute_domain[1]),
                    static_cast<size_t>(compute_domain[0])};
-    mcw_cxxamp_launch_kernel<pfe_wrapper<N, Kernel>, 3>(ext, NULL, _pf);
+#ifdef __CPU_PATH__
+    index<2> idx;
+    cpu_helper<2, Kernel, 2>::call(f, idx, compute_domain);
+#else
+    mcw_cxxamp_launch_kernel<Kernel, 2>(ext, NULL, f);
+#endif
 #else //ifndef __GPU__
   //to ensure functor has right operator() defined
   //this triggers the trampoline code being emitted
@@ -277,14 +285,18 @@ __attribute__((noinline,used)) void parallel_for_each(
   size_t ext[3] = {static_cast<size_t>(compute_domain[2]),
                    static_cast<size_t>(compute_domain[1]),
                    static_cast<size_t>(compute_domain[0])};
-    mcw_cxxamp_launch_kernel<pfe_wrapper<N, Kernel>, 3>(ext, NULL, _pf);
+#ifdef __CPU_PATH__
+    index<3> idx;
+    cpu_helper<3, Kernel, 3>::call(f, idx, compute_domain);
+#else
+    mcw_cxxamp_launch_kernel<Kernel, 3>(ext, NULL, f);
+#endif
 #else //ifndef __GPU__
   //to ensure functor has right operator() defined
   //this triggers the trampoline code being emitted
   int* foo = reinterpret_cast<int*>(&Kernel::__cxxamp_trampoline);
 #endif
 }
-#endif
 
 //1D parallel_for_each, tiled
 template <int D0, typename Kernel>
@@ -304,15 +316,21 @@ __attribute__((noinline,used)) void parallel_for_each(
     throw invalid_compute_domain("Extent can't be evenly divisble by tile size.");
   }
 #ifdef __CPU_PATH__
-    for (int tx = 0; tx < ext/tile; tx++) {
-        std::thread t[D0];
+    for (int tx = 0; tx < ext / tile; tx++) {
         amp_bar.set(D0);
         for (int x = 0; x < tile; x++) {
-            tiled_index<D0> tidx(tx * tile + x, x, tx);
-            t[x] = std::thread(f, tidx);
+            if (amp_bar.set_jmp() == 0) {
+                tiled_index<D0> tidx(tx * tile + x, x, tx);
+                f(tidx);
+            }
         }
-        for (int x = 0; x < tile; x++)
-            t[x].join();
+        while(amp_bar.count == D0) {
+            amp_bar.restart = 0;
+            amp_bar.count = 0;
+            for (int x = 0; x < tile; x++)
+                if (amp_bar.set_jmp() == 0)
+                    amp_bar.jump_back();
+        }
     }
 #else
   mcw_cxxamp_launch_kernel<Kernel, 1>(&ext, &tile, f);
@@ -345,24 +363,40 @@ __attribute__((noinline,used)) void parallel_for_each(
     throw invalid_compute_domain("Extent can't be evenly divisble by tile size.");
   }
 #ifdef __CPU_PATH__
+    for (int tx = 0; tx < ext / tile; tx++) {
+        amp_bar.set(D0);
+        for (int x = 0; x < tile; x++) {
+            if (amp_bar.set_jmp() == 0) {
+                tiled_index<D0> tidx(tx * tile + x, x, tx);
+                f(tidx);
+            }
+        }
+        while(amp_bar.count == D0) {
+            amp_bar.restart = 0;
+            amp_bar.count = 0;
+            for (int x = 0; x < tile; x++)
+                if (amp_bar.set_jmp() == 0)
+                    amp_bar.jump_back();
+        }
+    }
     for (int tx = 0; tx < ext[0] / tile[0]; tx++)
         for (int ty = 0; ty < ext[1] / tile[1]; ty++) {
-            std::thread t[D0][D1];
             amp_bar.set(D0 * D1);
             for (int x = 0; x < tile[0]; x++)
-                for (int y = 0; y < tile[1]; y++) {
-                    tiled_index<D0, D1> tidx(D0 * tx + x, D1 * ty + ty, tx, ty, x, y);
-                    t[x][y] = std::thread(f, tidx);
-                }
-            for (int x = 0; x < tile[0]; x++)
                 for (int y = 0; y < tile[1]; y++)
-                    t[x][y].join();
+                    if (amp_bar.set_jmp() == 0) {
+                        tiled_index<D1, D0> tidx(tile[0] * tx + x, tile[1] * ty + y, x, y, tx, ty);
+                        f(tidx);
+                    }
+            while(amp_bar.count == D0 * D1) {
+                amp_bar.restart = 0;
+                amp_bar.count = 0;
+                for (int x = 0; x < tile[0]; x++)
+                    for (int y = 0; y < tile[1]; y++)
+                        if (amp_bar.set_jmp() == 0)
+                            amp_bar.jump_back();
+            }
         }
-  // for (int i = 0; i < ext[0]; i++)
-  //     for (int j = 0; j < ext[1]; j++) {
-  //         tiled_index<D0, D1> tidx(i, j, i % tile[0], j % tile[1], i / tile[0], j / tile[1]);
-  //         f(tidx);
-  //     }
 #else
   mcw_cxxamp_launch_kernel<Kernel, 2>(ext, tile, f);
 #endif

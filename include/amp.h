@@ -27,9 +27,12 @@
 #if !defined(CXXAMP_ENABLE_HSA_OKRA) && !defined(__CPU_PATH__)
 #include <gmac/opencl.h>
 #endif
+#include <iostream>
 #include <memory>
 #include <algorithm>
 #include <set>
+#include <cstdio>
+#include <csetjmp>
 #include <type_traits>
 // CLAMP
 #include <serialize.h>
@@ -665,24 +668,23 @@ private:
 // C++AMP LPM 4.5
 #ifdef __CPU_PATH__
 struct barrier_t {
-    std::atomic<size_t> count;
-    std::atomic<size_t> space;
-    std::atomic<size_t> generation;
-    void set(size_t count_) {
-        count = count_;
-        space = count_;
-        generation = 0;
+    size_t count, restart;
+    jmp_buf *buf_list, pfe;
+    void set(int count_) {
+        if (buf_list) 
+            delete [] buf_list;
+        buf_list = new jmp_buf[count_];
+        count = 0;
     }
-    void wait()
-    {
-        size_t const gen = generation.load();
-        if (!--space) {
-            space = count.load();
-            ++generation;
-        } else {
-            while (generation.load() == gen)
-                std::this_thread::yield();
-        }
+    int set_jmp() {
+        return setjmp(pfe);
+    }
+    void wait() {
+        if (setjmp(buf_list[count++]) == 0)
+            longjmp(pfe, 100);
+    }
+    void jump_back() {
+        longjmp(buf_list[restart++], 1);
     }
 } amp_bar;
 class tile_barrier {
