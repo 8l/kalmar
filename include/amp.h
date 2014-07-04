@@ -692,16 +692,25 @@ struct barrier_t {
     void swap(int a, int b) {
         swapcontext(&ctx[a], &ctx[b]);
     }
-    void wait() {
+    void wait() restrict(amp) {
         --idx;
         swapcontext(&ctx[idx + 1], &ctx[idx]);
     }
 } amp_bar;
 class tile_barrier {
 public:
-    void wait() const restrict(cpu, amp) {
+    void wait() const restrict(amp) {
         amp_bar.wait();
     }
+  void wait_with_all_memory_fence() const restrict(amp) {
+        amp_bar.wait();
+  }
+  void wait_with_global_memory_fence() const restrict(amp) {
+        amp_bar.wait();
+  }
+  void wait_with_tile_static_memory_fence() const restrict(amp) {
+        amp_bar.wait();
+  }
 private:
     template<int D0, int D1, int D2>
         friend class tiled_index;

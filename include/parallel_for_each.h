@@ -177,8 +177,7 @@ struct cpu_helper<0, Kernel, K>
     }
 };
 
-#define SSIZE 8192*2
-
+#define SSIZE 8192
 
 template <int N, typename Kernel>
 __attribute__((noinline,used)) void parallel_for_each(
