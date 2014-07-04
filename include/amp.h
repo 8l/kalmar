@@ -27,12 +27,10 @@
 #if !defined(CXXAMP_ENABLE_HSA_OKRA) && !defined(__CPU_PATH__)
 #include <gmac/opencl.h>
 #endif
-#include <iostream>
-#include <functional>
 #include <memory>
 #include <algorithm>
 #include <set>
-#include <cstdio>
+#include <signal.h>
 #include <type_traits>
 // CLAMP
 #include <serialize.h>
