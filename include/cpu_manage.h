@@ -42,6 +42,7 @@ class _data {
   __attribute__((annotate("user_deserialize")))
   explicit _data(__global T* t) restrict(cpu, amp) { p_ = t; }
   __global T* get(void) const restrict(cpu, amp) { return p_; }
+  __global T* get_data() const restrict(cpu, amp) { return get(); }
   __global T* get_mutable(void) const restrict(cpu, amp) { return p_; }
   void reset(__global T *t = NULL) restrict(cpu, amp) { p_ = t; }
  private:
@@ -165,6 +166,9 @@ class _data_host_view {
     }
   }
   T* get() const {
+    return get_mutable();
+  }
+  T* get_data() const {
     return get_mutable();
   }
 
