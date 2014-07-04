@@ -671,9 +671,9 @@ class tiled_index;
 #ifdef __CPU_PATH__
 #include <ucontext.h>
 template <typename Ker, typename Ti>
-void bar_wrapper(Ker f, Ti t)
+void bar_wrapper(Ker *f, Ti *t)
 {
-    f(t);
+    (*f)(*t);
 }
 struct barrier_t {
     std::unique_ptr<ucontext_t[]> ctx;
