@@ -149,7 +149,7 @@ public:
     explicit pfe_wrapper(extent<N>& other, const Kernel& f) restrict(amp,cpu)
         : ext(other), k(f) {}
     void operator() (index<N> idx) restrict(amp,cpu) {
-        pfe_helper<N, pfe_wrapper<N, Kernel>, index<N>>::call(*this, idx);
+        pfe_helper<N - 3, pfe_wrapper<N, Kernel>, index<N>>::call(*this, idx);
     }
 private:
     const extent<N> ext;
@@ -230,7 +230,7 @@ __attribute__((noinline,used)) void parallel_for_each(
     index<1> idx;
     cpu_helper<1, Kernel, 1>::call(f, idx, compute_domain);
 #else
-    mcw_cxxamp_launch_kernel<Kernel, 1>(ext, NULL, f);
+    mcw_cxxamp_launch_kernel<Kernel, 1>(&ext, NULL, f);
 #endif
 #else //ifndef __GPU__
   //to ensure functor has right operator() defined
