@@ -177,6 +177,8 @@ struct cpu_helper<0, Kernel, K>
     }
 };
 
+#define SSIZE 8192*2
+
 
 template <int N, typename Kernel>
 __attribute__((noinline,used)) void parallel_for_each(
@@ -316,7 +318,7 @@ __attribute__((noinline,used)) void parallel_for_each(
     throw invalid_compute_domain("Extent can't be evenly divisble by tile size.");
   }
 #ifdef __CPU_PATH__
-    static char stk[D0][8192];
+    static char stk[D0][SSIZE];
     tiled_index<D0> tidx[D0];
     amp_bar.reset(D0);
     for (int tx = 0; tx < ext / tile; tx++) {
@@ -361,21 +363,7 @@ __attribute__((noinline,used)) void parallel_for_each(
     throw invalid_compute_domain("Extent can't be evenly divisble by tile size.");
   }
 #ifdef __CPU_PATH__
-    // static char stk[D0][8192];
-    // tiled_index<D0> tidx[D0];
-    // amp_bar.reset(D0);
-    // for (int tx = 0; tx < ext / tile; tx++) {
-    //     for (int x = 0; x < tile; x++) {
-    //         tidx[x] = tiled_index<D0>(tx * tile + x, x, tx);
-    //         amp_bar.setctx(x + 1, &stk[x], f, tidx[x]);
-    //     }
-    //     amp_bar.idx = 0;
-    //     while (amp_bar.idx == 0) {
-    //         amp_bar.idx = D0;
-    //         amp_bar.swap(0, D0);
-    //     }
-    // }
-    static char stk[D1][D0][8192];
+    static char stk[D1][D0][SSIZE];
     tiled_index<D0, D1> tidx[D1][D0];
     for (int tx = 0; tx < ext[0] / tile[0]; tx++)
         for (int ty = 0; ty < ext[1] / tile[1]; ty++) {
@@ -430,12 +418,25 @@ __attribute__((noinline,used)) void parallel_for_each(
     throw invalid_compute_domain("Extent can't be evenly divisble by tile size.");
   }
 #ifdef __CPU_PATH__
-  for (int i = 0; i < ext[0]; i++)
-      for (int j = 0; j < ext[1]; j++)
-        for(int k = 0; k < ext[2]; k++) {
-          tiled_index<D0, D1, D2> tidx(i, j, k, i % tile[0], j % tile[1], k % tile[2],
-                                       i / tile[0], j / tile[1], k / tile[2]);
-          f(tidx);
+  static char stk[D2][D1][D0][SSIZE];
+  tiled_index<D0, D1, D2> tidx[D2][D1][D0];
+  for (int i = 0; i < ext[0] / tile[0]; i++)
+      for (int j = 0; j < ext[1] / tile[0]; j++)
+        for(int k = 0; k < ext[2] / tile[0]; k++) {
+            amp_bar.reset(D0 * D1 * D2);
+            int id = 0;
+            for (int x = 0; x < tile[0]; x++)
+                for (int y = 0; y < tile[1]; y++)
+                    for (int z = 0; z < tile[2]; z++) {
+                        tidx[x][y][z] = tiled_index<D0, D1, D2>(i, j, k, i % tile[0], j % tile[1], k % tile[2],
+                                                                i / tile[0], j / tile[1], k / tile[2]);
+                        amp_bar.setctx(++id, &stk[x][y][z], f, tidx[x][y][z]);
+                    }
+            amp_bar.idx = 0;
+            while (amp_bar.idx == 0) {
+                amp_bar.idx = D0 * D1 * D2;
+                amp_bar.swap(0, D0 * D1 * D2);
+            }
         }
 #else
   mcw_cxxamp_launch_kernel<Kernel, 3>(ext, tile, f);

@@ -923,7 +923,14 @@ class tiled_index {
   static const int tile_dim1 = D1;
   static const int tile_dim2 = D2;
  private:
-
+  tiled_index& operator=(const tiled_index& other) {
+      const_cast<index<3>&>(global) = other.global;
+      const_cast<index<3>&>(local) = other.local;
+      const_cast<index<3>&>(tile) = other.tile;
+      const_cast<index<3>&>(tile_origin) = other.tile_origin;
+      const_cast<extent<3>&>(tile_extent) = other.tile_extent;
+      return *this;
+  }
   //CLAMP
   tiled_index(int a0, int a1, int a2, int b0, int b1, int b2,
               int c0, int c1, int c2) restrict(amp,cpu)
@@ -2555,8 +2562,11 @@ static inline int atomic_fetch_add(int *x, int y) restrict(amp,cpu) {
   return atomic_add_int(x, y);
 }
 #elif __CPU_PATH__
-template <typename T>
-static inline T atomic_fetch_add(T *x, T y) restrict(amp,cpu) {
+static inline unsigned int atomic_fetch_add(unsigned int *x, unsigned int y) restrict(amp,cpu) {
+    *x += y;
+    return *x;
+}
+static inline int atomic_fetch_add(int *x, int y) restrict(amp,cpu) {
     *x += y;
     return *x;
 }
@@ -2585,13 +2595,19 @@ static inline int atomic_fetch_inc(int *x) restrict(amp,cpu) {
   return atomic_inc_int(x);
 }
 #elif __CPU_PATH__
-template <typename T>
-static inline T atomic_fetch_max(T *p, T val) restrict(amp,cpu) {
+static inline unsigned int atomic_fetch_max(unsigned int *p, unsigned int val) restrict(amp,cpu) {
     *p = std::max(*p, val);
     return *p;
 }
-template <typename T>
-static inline T atomic_fetch_inc(T *p) restrict(amp,cpu) {
+static inline int atomic_fetch_max(int *p, int val) restrict(amp,cpu) {
+    *p = std::max(*p, val);
+    return *p;
+}
+static inline unsigned int atomic_fetch_inc(unsigned int *p) restrict(amp,cpu) {
+    *p += 1;
+    return *p;
+}
+static inline int atomic_fetch_inc(int *p) restrict(amp,cpu) {
     *p += 1;
     return *p;
 }
