@@ -692,7 +692,7 @@ struct barrier_t {
     void swap(int a, int b) {
         swapcontext(&ctx[a], &ctx[b]);
     }
-    void wait() restrict(amp) {
+    void wait() {
         --idx;
         swapcontext(&ctx[idx + 1], &ctx[idx]);
     }

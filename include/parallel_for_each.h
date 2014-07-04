@@ -177,7 +177,7 @@ struct cpu_helper<0, Kernel, K>
     }
 };
 
-#define SSIZE 8192
+#define SSIZE 8192 * 2
 
 template <int N, typename Kernel>
 __attribute__((noinline,used)) void parallel_for_each(
@@ -321,9 +321,10 @@ __attribute__((noinline,used)) void parallel_for_each(
     tiled_index<D0> tidx[D0];
     amp_bar.reset(D0);
     for (int tx = 0; tx < ext / tile; tx++) {
+        int id = 0;
         for (int x = 0; x < tile; x++) {
             tidx[x] = tiled_index<D0>(tx * tile + x, x, tx);
-            amp_bar.setctx(x + 1, &stk[x], f, tidx[x]);
+            amp_bar.setctx(++id, &stk[x], f, tidx[x]);
         }
         amp_bar.idx = 0;
         while (amp_bar.idx == 0) {
