@@ -421,8 +421,8 @@ __attribute__((noinline,used)) void parallel_for_each(
   static char stk[D2][D1][D0][SSIZE];
   tiled_index<D0, D1, D2> tidx[D2][D1][D0];
   for (int i = 0; i < ext[0] / tile[0]; i++)
-      for (int j = 0; j < ext[1] / tile[0]; j++)
-        for(int k = 0; k < ext[2] / tile[0]; k++) {
+      for (int j = 0; j < ext[1] / tile[1]; j++)
+        for(int k = 0; k < ext[2] / tile[2]; k++) {
             amp_bar.reset(D0 * D1 * D2);
             int id = 0;
             for (int x = 0; x < tile[0]; x++)
