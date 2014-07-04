@@ -28,11 +28,11 @@
 #include <gmac/opencl.h>
 #endif
 #include <iostream>
+#include <functional>
 #include <memory>
 #include <algorithm>
 #include <set>
 #include <cstdio>
-#include <csetjmp>
 #include <type_traits>
 // CLAMP
 #include <serialize.h>
@@ -664,31 +664,37 @@ private:
 #ifndef CLK_GLOBAL_MEM_FENCE
 #define CLK_GLOBAL_MEM_FENCE (2)
 #endif
+template <int D0, int D1, int D2>
+class tiled_index;
 
 // C++AMP LPM 4.5
 #ifdef __CPU_PATH__
+#include <ucontext.h>
+template <typename Ker, typename Ti>
+void bar_wrapper(Ker f, Ti t)
+{
+    f(t);
+}
 struct barrier_t {
-    size_t count, restart;
-    std::jmp_buf *buf_list;
-    std::jmp_buf pfe;
-    barrier_t () {
-        buf_list = NULL;
+    std::unique_ptr<ucontext_t[]> ctx;
+    int idx;
+    void reset(int a) {
+        ctx.reset(new ucontext_t[a + 1]);
     }
-    void set(int count_) {
-        if (buf_list)
-            delete [] buf_list;
-        buf_list = new jmp_buf[count_];
-        count = 0;
+    template <typename Ti, typename Ker, int S>
+    void setctx(int x, char (*stack)[S], Ker& f, Ti& tidx) {
+        getcontext(&ctx[x]);
+        ctx[x].uc_stack.ss_sp = *stack;
+        ctx[x].uc_stack.ss_size = S;
+        ctx[x].uc_link = &ctx[x - 1];
+        makecontext(&ctx[x], (void (*)(void))bar_wrapper<Ker, Ti>, 2, &f, &tidx);
     }
-    int set_jmp() {
-        return setjmp(pfe);
+    void swap(int a, int b) {
+        swapcontext(&ctx[a], &ctx[b]);
     }
     void wait() {
-        if (setjmp(buf_list[count++]) == 0)
-            longjmp(pfe, 100);
-    }
-    void jump_back() {
-        longjmp(buf_list[restart++], 1);
+        --idx;
+        swapcontext(&ctx[idx + 1], &ctx[idx]);
     }
 } amp_bar;
 class tile_barrier {
@@ -917,6 +923,7 @@ class tiled_index {
   static const int tile_dim1 = D1;
   static const int tile_dim2 = D2;
  private:
+
   //CLAMP
   tiled_index(int a0, int a1, int a2, int b0, int b1, int b2,
               int c0, int c1, int c2) restrict(amp,cpu)
@@ -958,6 +965,14 @@ class tiled_index<D0, 0, 0> {
   }
   static const int tile_dim0 = D0;
  private:
+  tiled_index& operator=(const tiled_index& other) {
+      const_cast<index<1>&>(global) = other.global;
+      const_cast<index<1>&>(local) = other.local;
+      const_cast<index<1>&>(tile) = other.tile;
+      const_cast<index<1>&>(tile_origin) = other.tile_origin;
+      const_cast<extent<1>&>(tile_extent) = other.tile_extent;
+      return *this;
+  }
   //CLAMP
   __attribute__((always_inline)) tiled_index(int a, int b, int c) restrict(amp, cpu)
   : global(a), local(b), tile(c), tile_origin(a - b), tile_extent(D0) {}
@@ -996,6 +1011,14 @@ class tiled_index<D0, D1, 0> {
   static const int tile_dim0 = D0;
   static const int tile_dim1 = D1;
  private:
+  tiled_index& operator=(const tiled_index& other) {
+      const_cast<index<2>&>(global) = other.global;
+      const_cast<index<2>&>(local) = other.local;
+      const_cast<index<2>&>(tile) = other.tile;
+      const_cast<index<2>&>(tile_origin) = other.tile_origin;
+      const_cast<extent<2>&>(tile_extent) = other.tile_extent;
+      return *this;
+  }
   //CLAMP
   tiled_index(int a0, int a1, int b0, int b1, int c0, int c1) restrict(amp, cpu)
       : global(a1, a0), local(b1, b0), tile(c1, c0), tile_origin(a1 - b1, a0 - b0), tile_extent(D0, D1) {}
@@ -2531,6 +2554,12 @@ static inline unsigned atomic_fetch_add(unsigned *x, unsigned y) restrict(amp,cp
 static inline int atomic_fetch_add(int *x, int y) restrict(amp,cpu) {
   return atomic_add_int(x, y);
 }
+#elif __CPU_PATH__
+template <typename T>
+static inline T atomic_fetch_add(T *x, T y) restrict(amp,cpu) {
+    *x += y;
+    return *x;
+}
 #else
 extern unsigned atomic_fetch_add(unsigned *x, unsigned y) restrict(amp,cpu);
 extern int atomic_fetch_add(int *x, int y) restrict(amp, cpu);
@@ -2554,6 +2583,17 @@ static inline unsigned atomic_fetch_inc(unsigned *x) restrict(amp,cpu) {
 }
 static inline int atomic_fetch_inc(int *x) restrict(amp,cpu) {
   return atomic_inc_int(x);
+}
+#elif __CPU_PATH__
+template <typename T>
+static inline T atomic_fetch_max(T *p, T val) restrict(amp,cpu) {
+    *p = std::max(*p, val);
+    return *p;
+}
+template <typename T>
+static inline T atomic_fetch_inc(T *p) restrict(amp,cpu) {
+    *p += 1;
+    return *p;
 }
 #else
 
