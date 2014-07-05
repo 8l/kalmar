@@ -710,8 +710,6 @@ public:
         amp_bar.wait();
   }
 private:
-    template<int D0, int D1, int D2>
-        friend class tiled_index;
 };
 #else
 class tile_barrier {

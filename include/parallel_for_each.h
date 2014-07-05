@@ -428,10 +428,10 @@ __attribute__((noinline,used)) void parallel_for_each(
             for (int x = 0; x < tile[0]; x++)
                 for (int y = 0; y < tile[1]; y++)
                     for (int z = 0; z < tile[2]; z++) {
-                        tidx[x][y][z] = tiled_index<D0, D1, D2>(tile[0] * tx + x,
-                                                                tile[1] * ty + y,
-                                                                tile[2] * tz + z,
-                                                                x, y, z, tx, ty, tz);
+                        tidx[x][y][z] = tiled_index<D0, D1, D2>(tile[0] * i + x,
+                                                                tile[1] * j + y,
+                                                                tile[2] * k + z,
+                                                                x, y, z, i, j, k);
                         amp_bar.setctx(++id, &stk[x][y][z], f, tidx[x][y][z]);
                     }
             amp_bar.idx = 0;
