@@ -158,6 +158,12 @@ private:
         friend struct pfe_helper;
 };
 
+#ifdef __CPU_PATH__
+#include <thread>
+#define SSIZE 1024
+#ifndef NTHREAD
+    #define NTHREAD 1
+#endif
 template <int N, typename Kernel,  int K>
 struct cpu_helper
 {
@@ -177,7 +183,18 @@ struct cpu_helper<0, Kernel, K>
     }
 };
 
-#define SSIZE 1024
+template <typename Kernel, int N>
+void partitioed_task(const Kernel& ker, extent<N>& ext, int part) {
+    index<N> idx;
+    int start = ext[N - 1] * part / NTHREAD;
+    int end = ext[N - 1] * (part + 1) / NTHREAD;
+    for (int i = start; i < end; i++) {
+        idx[N - 1] = i;
+        cpu_helper<N - 1, Kernel, N>::call(ker, idx, ext);
+    }
+}
+
+#endif
 
 template <int N, typename Kernel>
 __attribute__((noinline,used)) void parallel_for_each(
@@ -200,8 +217,11 @@ __attribute__((noinline,used)) void parallel_for_each(
         static_cast<size_t>(compute_domain[N - 3])};
     const pfe_wrapper<N, Kernel> _pf(compute_domain, f);
 #ifdef __CPU_PATH__
-    index<N> idx;
-    cpu_helper<N, Kernel, N>::call(f, idx, compute_domain);
+    std::thread th[NTHREAD];
+    for (int i = 0; i < NTHREAD; ++i)
+        th[i] = std::thread(partitioed_task<Kernel, N>, std::ref(f), std::ref(compute_domain), i);
+    for (int i = 0; i < NTHREAD; ++i)
+        th[i].join();
 #else
     mcw_cxxamp_launch_kernel<pfe_wrapper<N, Kernel>, 3>(ext, NULL, _pf);
 #endif
@@ -226,8 +246,11 @@ __attribute__((noinline,used)) void parallel_for_each(
     throw invalid_compute_domain("Extent size too large.");
   size_t ext = compute_domain[0];
 #ifdef __CPU_PATH__
-    index<1> idx;
-    cpu_helper<1, Kernel, 1>::call(f, idx, compute_domain);
+    std::thread th[NTHREAD];
+    for (int i = 0; i < NTHREAD; ++i)
+        th[i] = std::thread(partitioed_task<Kernel, 1>, std::ref(f), std::ref(compute_domain), i);
+    for (int i = 0; i < NTHREAD; ++i)
+        th[i].join();
 #else
     mcw_cxxamp_launch_kernel<Kernel, 1>(&ext, NULL, f);
 #endif
@@ -253,8 +276,11 @@ __attribute__((noinline,used)) void parallel_for_each(
   size_t ext[2] = {static_cast<size_t>(compute_domain[1]),
                    static_cast<size_t>(compute_domain[0])};
 #ifdef __CPU_PATH__
-    index<2> idx;
-    cpu_helper<2, Kernel, 2>::call(f, idx, compute_domain);
+    std::thread th[NTHREAD];
+    for (int i = 0; i < NTHREAD; ++i)
+        th[i] = std::thread(partitioed_task<Kernel, 2>, std::ref(f), std::ref(compute_domain), i);
+    for (int i = 0; i < NTHREAD; ++i)
+        th[i].join();
 #else
     mcw_cxxamp_launch_kernel<Kernel, 2>(ext, NULL, f);
 #endif
@@ -287,8 +313,11 @@ __attribute__((noinline,used)) void parallel_for_each(
                    static_cast<size_t>(compute_domain[1]),
                    static_cast<size_t>(compute_domain[0])};
 #ifdef __CPU_PATH__
-    index<3> idx;
-    cpu_helper<3, Kernel, 3>::call(f, idx, compute_domain);
+    std::thread th[NTHREAD];
+    for (int i = 0; i < NTHREAD; ++i)
+        th[i] = std::thread(partitioed_task<Kernel, 3>, std::ref(f), std::ref(compute_domain), i);
+    for (int i = 0; i < NTHREAD; ++i)
+        th[i].join();
 #else
     mcw_cxxamp_launch_kernel<Kernel, 3>(ext, NULL, f);
 #endif
