@@ -348,17 +348,18 @@ __attribute__((noinline,used)) void parallel_for_each(
 #ifdef __CPU_PATH__
     static char stk[D0][SSIZE];
     tiled_index<D0> tidx[D0];
-    amp_bar.reset(D0);
+    tile_barrier::pb_type amp_bar(new barrier_t(D0));
+    tile_barrier tbar(amp_bar);
     for (int tx = 0; tx < ext / tile; tx++) {
         int id = 0;
         for (int x = 0; x < tile; x++) {
-            tidx[x] = tiled_index<D0>(tx * tile + x, x, tx);
-            amp_bar.setctx(++id, &stk[x], f, tidx[x]);
+            tidx[x] = tiled_index<D0>(tx * tile + x, x, tx, tbar);
+            amp_bar->setctx(++id, &stk[x], f, tidx[x]);
         }
-        amp_bar.idx = 0;
-        while (amp_bar.idx == 0) {
-            amp_bar.idx = D0;
-            amp_bar.swap(0, D0);
+        amp_bar->idx = 0;
+        while (amp_bar->idx == 0) {
+            amp_bar->idx = D0;
+            amp_bar->swap(0, D0);
         }
     }
 #else
@@ -394,19 +395,20 @@ __attribute__((noinline,used)) void parallel_for_each(
 #ifdef __CPU_PATH__
     static char stk[D1][D0][SSIZE];
     tiled_index<D0, D1> tidx[D1][D0];
+    tile_barrier::pb_type amp_bar(new barrier_t(D0 * D1));
+    tile_barrier tbar(amp_bar);
     for (int tx = 0; tx < ext[0] / tile[0]; tx++)
         for (int ty = 0; ty < ext[1] / tile[1]; ty++) {
-            amp_bar.reset(D0 * D1);
             int id = 0;
             for (int x = 0; x < tile[0]; x++)
                 for (int y = 0; y < tile[1]; y++) {
-                        tidx[x][y] = tiled_index<D0, D1>(tile[0] * tx + x, tile[1] * ty + y, x, y, tx, ty);
-                        amp_bar.setctx(++id, &stk[x][y], f, tidx[x][y]);
+                        tidx[x][y] = tiled_index<D0, D1>(tile[0] * tx + x, tile[1] * ty + y, x, y, tx, ty, tbar);
+                        amp_bar->setctx(++id, &stk[x][y], f, tidx[x][y]);
                 }
-            amp_bar.idx = 0;
-            while (amp_bar.idx == 0) {
-                amp_bar.idx = D0 * D1;
-                amp_bar.swap(0, D0 * D1);
+            amp_bar->idx = 0;
+            while (amp_bar->idx == 0) {
+                amp_bar->idx = D0 * D1;
+                amp_bar->swap(0, D0 * D1);
             }
         }
 #else
@@ -449,10 +451,11 @@ __attribute__((noinline,used)) void parallel_for_each(
 #ifdef __CPU_PATH__
   static char stk[D2][D1][D0][SSIZE];
   tiled_index<D0, D1, D2> tidx[D2][D1][D0];
+  tile_barrier::pb_type amp_bar(new barrier_t(D0 * D1 * D2));
+  tile_barrier tbar(amp_bar);
   for (int i = 0; i < ext[0] / tile[0]; i++)
       for (int j = 0; j < ext[1] / tile[1]; j++)
         for(int k = 0; k < ext[2] / tile[2]; k++) {
-            amp_bar.reset(D0 * D1 * D2);
             int id = 0;
             for (int x = 0; x < tile[0]; x++)
                 for (int y = 0; y < tile[1]; y++)
@@ -460,13 +463,13 @@ __attribute__((noinline,used)) void parallel_for_each(
                         tidx[x][y][z] = tiled_index<D0, D1, D2>(tile[0] * i + x,
                                                                 tile[1] * j + y,
                                                                 tile[2] * k + z,
-                                                                x, y, z, i, j, k);
-                        amp_bar.setctx(++id, &stk[x][y][z], f, tidx[x][y][z]);
+                                                                x, y, z, i, j, k, tbar);
+                        amp_bar->setctx(++id, &stk[x][y][z], f, tidx[x][y][z]);
                     }
-            amp_bar.idx = 0;
-            while (amp_bar.idx == 0) {
-                amp_bar.idx = D0 * D1 * D2;
-                amp_bar.swap(0, D0 * D1 * D2);
+            amp_bar->idx = 0;
+            while (amp_bar->idx == 0) {
+                amp_bar->idx = D0 * D1 * D2;
+                amp_bar->swap(0, D0 * D1 * D2);
             }
         }
 #else
