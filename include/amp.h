@@ -1521,7 +1521,7 @@ public:
   access_type get_cpu_access_type() const {return cpu_access_type;}
 
   __global T& operator[](const index<N>& idx) restrict(amp,cpu) {
-#ifndef __GPU__
+#if !defined(__GPU__) && !defined(__CPU_PATH__)
       if(pav && (pav->get_accelerator() == accelerator(accelerator::gpu_accelerator))) {
           throw runtime_exception("The array is not accessible on CPU.", 0);
       }
@@ -1530,7 +1530,7 @@ public:
       return ptr[amp_helper<N, index<N>, Concurrency::extent<N> >::flatten(idx, extent)];
   }
   __global const T& operator[](const index<N>& idx) const restrict(amp,cpu) {
-#ifndef __GPU__
+#if !defined(__GPU__) && !defined(__CPU_PATH__)
       if(pav && (pav->get_accelerator() == accelerator(accelerator::gpu_accelerator))) {
           throw runtime_exception("The array is not accessible on CPU.", 0);
       }
