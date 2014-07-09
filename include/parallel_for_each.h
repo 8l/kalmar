@@ -160,7 +160,7 @@ private:
 
 #ifdef __CPU_PATH__
 #include <thread>
-#define SSIZE 1024
+#define SSIZE 8192
 #ifndef NTHREAD
     #define NTHREAD 1
 #endif
