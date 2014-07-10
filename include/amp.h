@@ -2574,11 +2574,14 @@ static inline int atomic_fetch_add(int *x, int y) restrict(amp,cpu) {
   return atomic_add_int(x, y);
 }
 #elif __CPU_PATH__
+std::mutex afa_u, afa_i;
 static inline unsigned int atomic_fetch_add(unsigned int *x, unsigned int y) restrict(amp,cpu) {
+    std::lock_guard<std::mutex> guard(afa_u);
     *x += y;
     return *x;
 }
 static inline int atomic_fetch_add(int *x, int y) restrict(amp,cpu) {
+    std::lock_guard<std::mutex> guard(afa_i);
     *x += y;
     return *x;
 }
@@ -2607,19 +2610,25 @@ static inline int atomic_fetch_inc(int *x) restrict(amp,cpu) {
   return atomic_inc_int(x);
 }
 #elif __CPU_PATH__
+std::mutex afm_u, afm_i;
 static inline unsigned int atomic_fetch_max(unsigned int *p, unsigned int val) restrict(amp,cpu) {
+    std::lock_guard<std::mutex> guard(afm_u);
     *p = std::max(*p, val);
     return *p;
 }
 static inline int atomic_fetch_max(int *p, int val) restrict(amp,cpu) {
+    std::lock_guard<std::mutex> guard(afm_i);
     *p = std::max(*p, val);
     return *p;
 }
+std::mutex afi_u, afi_i;
 static inline unsigned int atomic_fetch_inc(unsigned int *p) restrict(amp,cpu) {
+    std::lock_guard<std::mutex> guard(afi_u);
     *p += 1;
     return *p;
 }
 static inline int atomic_fetch_inc(int *p) restrict(amp,cpu) {
+    std::lock_guard<std::mutex> guard(afi_i);
     *p += 1;
     return *p;
 }
