@@ -169,14 +169,14 @@ struct cpu_helper
 {
     static inline void call(const Kernel& k, index<K>& idx, extent<K>& ext) restrict(amp,cpu) {
         int i;
-        for (i = 0; i < ext[N - 1]; ++i) {
-            idx[N - 1] = i;
-            cpu_helper<N - 1, Kernel, K>::call(k, idx, ext);
+        for (i = 0; i < ext[N]; ++i) {
+            idx[N] = i;
+            cpu_helper<N + 1, Kernel, K>::call(k, idx, ext);
         }
     }
 };
 template <typename Kernel, int K>
-struct cpu_helper<0, Kernel, K>
+struct cpu_helper<K, Kernel, K>
 {
     static inline void call(const Kernel& k, index<K>& idx, extent<K>& ext) restrict(amp,cpu) {
         k(idx);
@@ -186,11 +186,11 @@ struct cpu_helper<0, Kernel, K>
 template <typename Kernel, int N>
 void partitioed_task(const Kernel& ker, extent<N>& ext, int part) {
     index<N> idx;
-    int start = ext[N - 1] * part / NTHREAD;
-    int end = ext[N - 1] * (part + 1) / NTHREAD;
+    int start = ext[0] * part / NTHREAD;
+    int end = ext[0] * (part + 1) / NTHREAD;
     for (int i = start; i < end; i++) {
-        idx[N - 1] = i;
-        cpu_helper<N - 1, Kernel, N>::call(ker, idx, ext);
+        idx[0] = i;
+        cpu_helper<1, Kernel, N>::call(ker, idx, ext);
     }
 }
 
