@@ -160,7 +160,7 @@ private:
 
 #ifdef __CPU_PATH__
 #include <thread>
-#define SSIZE 8192 + 1024 * 2
+#define SSIZE 1024 * 10
 #ifndef NTHREAD
     #define NTHREAD 1
 #endif
@@ -192,6 +192,112 @@ void partitioed_task(const Kernel& ker, extent<N>& ext, int part) {
         idx[0] = i;
         cpu_helper<1, Kernel, N>::call(ker, idx, ext);
     }
+}
+
+struct bar_t {
+    unsigned const count;
+    std::atomic<unsigned> spaces;
+    std::atomic<unsigned> generation;
+    bar_t(unsigned count_) :
+        count(count_), spaces(count_), generation(0)
+    {}
+    void wait() {
+        unsigned const my_generation = generation;
+        if (!--spaces) {
+            spaces = count;
+            ++generation;
+        } else {
+            while(generation == my_generation);
+        }
+    }
+};
+
+template <typename Kernel, int D0>
+void partitioed_task_tile(const Kernel& f, tiled_extent<D0>& ext, int part, bar_t& gbar) {
+    int start = D0 * part / NTHREAD;
+    int end = D0 * (part + 1) / NTHREAD;
+    int stride = end - start;
+    if (stride == 0)
+        return;
+    static tiled_index<D0> tidx[D0];
+    static char stk[D0][SSIZE];
+    tile_barrier::pb_type amp_bar(new barrier_t(stride));
+    tile_barrier tbar(amp_bar);
+    for (int tx = 0; tx < ext[0] / D0; tx++) {
+        int id = 0;
+        for (int x = start; x < end; x++) {
+            tidx[x] = tiled_index<D0>(tx * D0 + x, x, tx, tbar);
+            amp_bar->setctx(++id, &stk[x], f, tidx[x]);
+        }
+        amp_bar->idx = 0;
+        while (amp_bar->idx == 0) {
+            amp_bar->idx = id;
+            amp_bar->swap(0, id);
+            gbar.wait();
+        }
+    }
+}
+template <typename Kernel, int D0, int D1>
+void partitioed_task_tile(const Kernel& f, tiled_extent<D0, D1>& ext, int part, bar_t& gbar) {
+    int start = D0 * part / NTHREAD;
+    int end = D0 * (part + 1) / NTHREAD;
+    int stride = end - start;
+    if (stride == 0)
+        return;
+    static char stk[D1][D0][SSIZE];
+    static tiled_index<D0, D1> tidx[D1][D0];
+    tile_barrier::pb_type amp_bar(new barrier_t(stride * D1));
+    tile_barrier tbar(amp_bar);
+
+    for (int tx = 0; tx < ext[1] / D1; tx++)
+        for (int ty = 0; ty < ext[0] / D0; ty++) {
+            int id = 0;
+            for (int x = 0; x < D1; x++)
+                for (int y = start; y < end; y++) {
+                    tidx[x][y] = tiled_index<D0, D1>(D1 * tx + x, D0 * ty + y, x, y, tx, ty, tbar);
+                    amp_bar->setctx(++id, &stk[x][y], f, tidx[x][y]);
+                }
+            amp_bar->idx = 0;
+            while (amp_bar->idx == 0) {
+                amp_bar->idx = id;
+                amp_bar->swap(0, id);
+                gbar.wait();
+            }
+        }
+}
+
+template <typename Kernel, int D0, int D1, int D2>
+void partitioed_task_tile(const Kernel& f, tiled_extent<D0, D1, D2>& ext, int part, bar_t& gbar) {
+    int start = D0 * part / NTHREAD;
+    int end = D0 * (part + 1) / NTHREAD;
+    int stride = end - start;
+    if (stride == 0)
+        return;
+    static char stk[D2][D1][D0][SSIZE];
+    static tiled_index<D0, D1, D2> tidx[D2][D1][D0];
+    tile_barrier::pb_type amp_bar(new barrier_t(stride * D1 * D2));
+    tile_barrier tbar(amp_bar);
+
+    for (int i = 0; i < ext[2] / D2; i++)
+        for (int j = 0; j < ext[1] / D1; j++)
+            for(int k = 0; k < ext[0] / D0; k++) {
+                int id = 0;
+                for (int x = 0; x < D2; x++)
+                    for (int y = 0; y < D1; y++)
+                        for (int z = start; z < end; z++) {
+                            tidx[x][y][z] = tiled_index<D0, D1, D2>(D2 * i + x,
+                                                                    D1 * j + y,
+                                                                    D0 * k + z,
+                                                                    x, y, z, i, j, k, tbar);
+                            amp_bar->setctx(++id, &stk[x][y][z], f, tidx[x][y][z]);
+                        }
+                amp_bar->idx = 0;
+                while (amp_bar->idx == 0) {
+                    amp_bar->idx = id;
+                    amp_bar->swap(0, id);
+                    gbar.wait();
+                }
+            }
 }
 
 #endif
@@ -346,22 +452,14 @@ __attribute__((noinline,used)) void parallel_for_each(
     throw invalid_compute_domain("Extent can't be evenly divisble by tile size.");
   }
 #ifdef __CPU_PATH__
-    static char stk[D0][SSIZE];
-    tiled_index<D0> tidx[D0];
-    tile_barrier::pb_type amp_bar(new barrier_t(D0));
-    tile_barrier tbar(amp_bar);
-    for (int tx = 0; tx < ext / tile; tx++) {
-        int id = 0;
-        for (int x = 0; x < tile; x++) {
-            tidx[x] = tiled_index<D0>(tx * tile + x, x, tx, tbar);
-            amp_bar->setctx(++id, &stk[x], f, tidx[x]);
-        }
-        amp_bar->idx = 0;
-        while (amp_bar->idx == 0) {
-            amp_bar->idx = D0;
-            amp_bar->swap(0, D0);
-        }
-    }
+    int k = D0 / NTHREAD;
+    k = k > 0 ? k : 1;
+    bar_t gbar(D0/k);
+    std::thread th[NTHREAD];
+    for (int i = 0; i < NTHREAD; ++i)
+        th[i] = std::thread(partitioed_task_tile<Kernel, D0>, std::ref(f), std::ref(compute_domain), i, std::ref(gbar));
+    for (int i = 0; i < NTHREAD; ++i)
+        th[i].join();
 #else
   mcw_cxxamp_launch_kernel<Kernel, 1>(&ext, &tile, f);
 #endif
@@ -393,24 +491,16 @@ __attribute__((noinline,used)) void parallel_for_each(
     throw invalid_compute_domain("Extent can't be evenly divisble by tile size.");
   }
 #ifdef __CPU_PATH__
-    static char stk[D1][D0][SSIZE];
-    tiled_index<D0, D1> tidx[D1][D0];
-    tile_barrier::pb_type amp_bar(new barrier_t(D0 * D1));
-    tile_barrier tbar(amp_bar);
-    for (int tx = 0; tx < ext[0] / tile[0]; tx++)
-        for (int ty = 0; ty < ext[1] / tile[1]; ty++) {
-            int id = 0;
-            for (int x = 0; x < tile[0]; x++)
-                for (int y = 0; y < tile[1]; y++) {
-                        tidx[x][y] = tiled_index<D0, D1>(tile[0] * tx + x, tile[1] * ty + y, x, y, tx, ty, tbar);
-                        amp_bar->setctx(++id, &stk[x][y], f, tidx[x][y]);
-                }
-            amp_bar->idx = 0;
-            while (amp_bar->idx == 0) {
-                amp_bar->idx = D0 * D1;
-                amp_bar->swap(0, D0 * D1);
-            }
-        }
+    int k = D0 / NTHREAD;
+    k = k > 0 ? k : 1;
+    bar_t gbar(D0/k);
+    std::thread th[NTHREAD];
+    for (int i = 0; i < NTHREAD; ++i)
+        th[i] = std::thread(partitioed_task_tile<Kernel, D0, D1>,
+                            std::ref(f), std::ref(compute_domain),
+                            i, std::ref(gbar));
+    for (int i = 0; i < NTHREAD; ++i)
+        th[i].join();
 #else
   mcw_cxxamp_launch_kernel<Kernel, 2>(ext, tile, f);
 #endif
@@ -449,29 +539,16 @@ __attribute__((noinline,used)) void parallel_for_each(
     throw invalid_compute_domain("Extent can't be evenly divisble by tile size.");
   }
 #ifdef __CPU_PATH__
-  static char stk[D2][D1][D0][SSIZE];
-  tiled_index<D0, D1, D2> tidx[D2][D1][D0];
-  tile_barrier::pb_type amp_bar(new barrier_t(D0 * D1 * D2));
-  tile_barrier tbar(amp_bar);
-  for (int i = 0; i < ext[0] / tile[0]; i++)
-      for (int j = 0; j < ext[1] / tile[1]; j++)
-        for(int k = 0; k < ext[2] / tile[2]; k++) {
-            int id = 0;
-            for (int x = 0; x < tile[0]; x++)
-                for (int y = 0; y < tile[1]; y++)
-                    for (int z = 0; z < tile[2]; z++) {
-                        tidx[x][y][z] = tiled_index<D0, D1, D2>(tile[0] * i + x,
-                                                                tile[1] * j + y,
-                                                                tile[2] * k + z,
-                                                                x, y, z, i, j, k, tbar);
-                        amp_bar->setctx(++id, &stk[x][y][z], f, tidx[x][y][z]);
-                    }
-            amp_bar->idx = 0;
-            while (amp_bar->idx == 0) {
-                amp_bar->idx = D0 * D1 * D2;
-                amp_bar->swap(0, D0 * D1 * D2);
-            }
-        }
+    int k = D0 / NTHREAD;
+    k = k > 0 ? k : 1;
+    bar_t gbar(D0/k);
+    std::thread th[NTHREAD];
+    for (int i = 0; i < NTHREAD; ++i)
+        th[i] = std::thread(partitioed_task_tile<Kernel, D0, D1, D2>,
+                            std::ref(f), std::ref(compute_domain),
+                            i, std::ref(gbar));
+    for (int i = 0; i < NTHREAD; ++i)
+        th[i].join();
 #else
   mcw_cxxamp_launch_kernel<Kernel, 3>(ext, tile, f);
 #endif

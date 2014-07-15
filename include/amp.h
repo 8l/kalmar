@@ -907,6 +907,7 @@ private:
 
 
 // C++AMP LPM 4.4.1
+struct bar_t;
 
 template <int D0, int D1=0, int D2=0>
 class tiled_index {
@@ -957,8 +958,8 @@ class tiled_index {
     tile_extent(D0, D1, D2)
 #endif // __GPU__
   {}
-  template<int D0_, int D1_, int D2_, typename K>
-  friend void parallel_for_each(tiled_extent<D0_, D1_, D2_>, const K&);
+  template<typename K, int D1_, int D2_, int D3_>
+  friend void partitioed_task_tile(const K&, tiled_extent<D1_, D2_, D3_>&, int, bar_t&);
 };
 template <int N> class extent;
 template <int D0>
@@ -1003,8 +1004,8 @@ class tiled_index<D0, 0, 0> {
     tile_extent(D0)
 #endif // __GPU__
   {}
-  template<int D, typename K>
-  friend void parallel_for_each(tiled_extent<D>, const K&);
+  template<typename K, int D>
+  friend void partitioed_task_tile(const K&, tiled_extent<D>&, int, bar_t&);
 };
 
 template <int D0, int D1>
@@ -1052,8 +1053,8 @@ class tiled_index<D0, D1, 0> {
     tile_extent(D0, D1)
 #endif // __GPU__
   {}
-  template<int D0_, int D1_, typename K>
-  friend void parallel_for_each(tiled_extent<D0_, D1_>, const K&);
+  template<typename K, int D1_, int D2_>
+  friend void partitioed_task_tile(const K&, tiled_extent<D1_, D2_>&, int, bar_t&);
 };
 
 
