@@ -201,7 +201,7 @@ struct bar_t {
     bar_t(unsigned count_) :
         count(count_), spaces(count_), generation(0)
     {}
-    void wait() {
+    void wait() noexcept {
         unsigned const my_generation = generation;
         if (!--spaces) {
             spaces = count;
@@ -221,7 +221,7 @@ void partitioed_task_tile(const Kernel& f, const tiled_extent<D0>& ext, int part
         return;
     static tiled_index<D0> tidx[D0];
     static char stk[D0][SSIZE];
-    tile_barrier::pb_type amp_bar(new barrier_t(stride));
+    tile_barrier::pb_t amp_bar = std::make_shared<barrier_t>(stride);
     tile_barrier tbar(amp_bar);
     for (int tx = 0; tx < ext[0] / D0; tx++) {
         int id = 0;
@@ -246,7 +246,7 @@ void partitioed_task_tile(const Kernel& f, const tiled_extent<D0, D1>& ext, int 
         return;
     static char stk[D1][D0][SSIZE];
     static tiled_index<D0, D1> tidx[D1][D0];
-    tile_barrier::pb_type amp_bar(new barrier_t(stride * D1));
+    tile_barrier::pb_t amp_bar = std::make_shared<barrier_t>(stride * D1);
     tile_barrier tbar(amp_bar);
 
     for (int tx = 0; tx < ext[1] / D1; tx++)
@@ -275,7 +275,7 @@ void partitioed_task_tile(const Kernel& f, const tiled_extent<D0, D1, D2>& ext, 
         return;
     static char stk[D2][D1][D0][SSIZE];
     static tiled_index<D0, D1, D2> tidx[D2][D1][D0];
-    tile_barrier::pb_type amp_bar(new barrier_t(stride * D1 * D2));
+    tile_barrier::pb_t amp_bar = std::make_shared<barrier_t>(stride * D1 * D2);
     tile_barrier tbar(amp_bar);
 
     for (int i = 0; i < ext[2] / D2; i++)

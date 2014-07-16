@@ -697,10 +697,10 @@ struct barrier_t {
 };
 class tile_barrier {
 public:
-    typedef std::shared_ptr<barrier_t> pb_type;
-    pb_type pbar;
+    using pb_t = std::shared_ptr<barrier_t>;
+    pb_t pbar;
     tile_barrier() restrict(amp,cpu) = default;
-    tile_barrier(pb_type pb) : pbar(pb) {}
+    tile_barrier(pb_t pb) : pbar(pb) {}
     void wait() const restrict(amp) {
         pbar->wait();
     }
