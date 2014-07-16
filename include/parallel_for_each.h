@@ -167,7 +167,7 @@ private:
 template <int N, typename Kernel,  int K>
 struct cpu_helper
 {
-    static inline void call(const Kernel& k, index<K>& idx, extent<K>& ext) restrict(amp,cpu) {
+    static inline void call(const Kernel& k, index<K>& idx, const extent<K>& ext) restrict(amp,cpu) {
         int i;
         for (i = 0; i < ext[N]; ++i) {
             idx[N] = i;
@@ -178,13 +178,13 @@ struct cpu_helper
 template <typename Kernel, int K>
 struct cpu_helper<K, Kernel, K>
 {
-    static inline void call(const Kernel& k, index<K>& idx, extent<K>& ext) restrict(amp,cpu) {
+    static inline void call(const Kernel& k, index<K>& idx, const extent<K>& ext) restrict(amp,cpu) {
         k(idx);
     }
 };
 
 template <typename Kernel, int N>
-void partitioed_task(const Kernel& ker, extent<N>& ext, int part) {
+void partitioed_task(const Kernel& ker, const extent<N>& ext, int part) {
     index<N> idx;
     int start = ext[0] * part / NTHREAD;
     int end = ext[0] * (part + 1) / NTHREAD;
@@ -213,7 +213,7 @@ struct bar_t {
 };
 
 template <typename Kernel, int D0>
-void partitioed_task_tile(const Kernel& f, tiled_extent<D0>& ext, int part, bar_t& gbar) {
+void partitioed_task_tile(const Kernel& f, const tiled_extent<D0>& ext, int part, bar_t& gbar) {
     int start = D0 * part / NTHREAD;
     int end = D0 * (part + 1) / NTHREAD;
     int stride = end - start;
@@ -238,7 +238,7 @@ void partitioed_task_tile(const Kernel& f, tiled_extent<D0>& ext, int part, bar_
     }
 }
 template <typename Kernel, int D0, int D1>
-void partitioed_task_tile(const Kernel& f, tiled_extent<D0, D1>& ext, int part, bar_t& gbar) {
+void partitioed_task_tile(const Kernel& f, const tiled_extent<D0, D1>& ext, int part, bar_t& gbar) {
     int start = D0 * part / NTHREAD;
     int end = D0 * (part + 1) / NTHREAD;
     int stride = end - start;
@@ -267,7 +267,7 @@ void partitioed_task_tile(const Kernel& f, tiled_extent<D0, D1>& ext, int part, 
 }
 
 template <typename Kernel, int D0, int D1, int D2>
-void partitioed_task_tile(const Kernel& f, tiled_extent<D0, D1, D2>& ext, int part, bar_t& gbar) {
+void partitioed_task_tile(const Kernel& f, const tiled_extent<D0, D1, D2>& ext, int part, bar_t& gbar) {
     int start = D0 * part / NTHREAD;
     int end = D0 * (part + 1) / NTHREAD;
     int stride = end - start;
@@ -325,7 +325,7 @@ __attribute__((noinline,used)) void parallel_for_each(
 #ifdef __CPU_PATH__
     std::thread th[NTHREAD];
     for (int i = 0; i < NTHREAD; ++i)
-        th[i] = std::thread(partitioed_task<Kernel, N>, std::ref(f), std::ref(compute_domain), i);
+        th[i] = std::thread(partitioed_task<Kernel, N>, std::cref(f), std::cref(compute_domain), i);
     for (int i = 0; i < NTHREAD; ++i)
         th[i].join();
 #else
@@ -354,7 +354,7 @@ __attribute__((noinline,used)) void parallel_for_each(
 #ifdef __CPU_PATH__
     std::thread th[NTHREAD];
     for (int i = 0; i < NTHREAD; ++i)
-        th[i] = std::thread(partitioed_task<Kernel, 1>, std::ref(f), std::ref(compute_domain), i);
+        th[i] = std::thread(partitioed_task<Kernel, 1>, std::cref(f), std::cref(compute_domain), i);
     for (int i = 0; i < NTHREAD; ++i)
         th[i].join();
 #else
@@ -384,7 +384,7 @@ __attribute__((noinline,used)) void parallel_for_each(
 #ifdef __CPU_PATH__
     std::thread th[NTHREAD];
     for (int i = 0; i < NTHREAD; ++i)
-        th[i] = std::thread(partitioed_task<Kernel, 2>, std::ref(f), std::ref(compute_domain), i);
+        th[i] = std::thread(partitioed_task<Kernel, 2>, std::cref(f), std::cref(compute_domain), i);
     for (int i = 0; i < NTHREAD; ++i)
         th[i].join();
 #else
@@ -421,7 +421,7 @@ __attribute__((noinline,used)) void parallel_for_each(
 #ifdef __CPU_PATH__
     std::thread th[NTHREAD];
     for (int i = 0; i < NTHREAD; ++i)
-        th[i] = std::thread(partitioed_task<Kernel, 3>, std::ref(f), std::ref(compute_domain), i);
+        th[i] = std::thread(partitioed_task<Kernel, 3>, std::cref(f), std::cref(compute_domain), i);
     for (int i = 0; i < NTHREAD; ++i)
         th[i].join();
 #else
@@ -457,7 +457,7 @@ __attribute__((noinline,used)) void parallel_for_each(
     bar_t gbar(D0/k);
     std::thread th[NTHREAD];
     for (int i = 0; i < NTHREAD; ++i)
-        th[i] = std::thread(partitioed_task_tile<Kernel, D0>, std::ref(f), std::ref(compute_domain), i, std::ref(gbar));
+        th[i] = std::thread(partitioed_task_tile<Kernel, D0>, std::cref(f), std::cref(compute_domain), i, std::ref(gbar));
     for (int i = 0; i < NTHREAD; ++i)
         th[i].join();
 #else
@@ -497,7 +497,7 @@ __attribute__((noinline,used)) void parallel_for_each(
     std::thread th[NTHREAD];
     for (int i = 0; i < NTHREAD; ++i)
         th[i] = std::thread(partitioed_task_tile<Kernel, D0, D1>,
-                            std::ref(f), std::ref(compute_domain),
+                            std::cref(f), std::cref(compute_domain),
                             i, std::ref(gbar));
     for (int i = 0; i < NTHREAD; ++i)
         th[i].join();
@@ -545,7 +545,7 @@ __attribute__((noinline,used)) void parallel_for_each(
     std::thread th[NTHREAD];
     for (int i = 0; i < NTHREAD; ++i)
         th[i] = std::thread(partitioed_task_tile<Kernel, D0, D1, D2>,
-                            std::ref(f), std::ref(compute_domain),
+                            std::cref(f), std::cref(compute_domain),
                             i, std::ref(gbar));
     for (int i = 0; i < NTHREAD; ++i)
         th[i].join();
