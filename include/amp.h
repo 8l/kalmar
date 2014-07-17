@@ -676,9 +676,9 @@ void bar_wrapper(Ker *f, Ti *t)
 struct barrier_t {
     std::unique_ptr<ucontext_t[]> ctx;
     int idx;
-    barrier_t (int a) {
-        ctx.reset(new ucontext_t[a + 1]);
-    }
+    barrier_t (int a) :
+        ctx(new ucontext_t[a + 1])
+    {}
     template <typename Ti, typename Ker, int S>
     void setctx(int x, char (*stack)[S], Ker& f, Ti& tidx) {
         getcontext(&ctx[x]);
