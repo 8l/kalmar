@@ -33,7 +33,9 @@ struct AMPAllocator
         int i;
         err = clGetPlatformIDs(10, platform_id, &num_platforms);
         for (i = 0; i < num_platforms; i++) {
-            err = clGetDeviceIDs(platform_id[i], CL_DEVICE_TYPE_GPU, 1, &device, NULL);
+            // AMD OpenCL 2.0 driver doesn't support CL_DEVICE_TYPE_GPU yet
+            //err = clGetDeviceIDs(platform_id[i], CL_DEVICE_TYPE_GPU, 1, &device, NULL);
+            err = clGetDeviceIDs(platform_id[i], CL_DEVICE_TYPE_CPU, 1, &device, NULL);
             if (err == CL_SUCCESS)
                 break;
         }
@@ -47,21 +49,31 @@ struct AMPAllocator
         assert(err == CL_SUCCESS);
         context = clCreateContext(0, 1, &device, NULL, NULL, &err);
         assert(err == CL_SUCCESS);
-        queue = clCreateCommandQueue(context, device, 0, &err);
+        queue = clCreateCommandQueueWithProperties(context, device, 0, &err);
         assert(err == CL_SUCCESS);
     }
     void AMPMalloc(void **cpu_ptr, size_t count) {
         cl_int err;
-        *cpu_ptr = ::operator new(count);
-        cl_mem dm = clCreateBuffer(context, CL_MEM_READ_WRITE, count, NULL, &err);
+
+        // use clSVMAlloc to allocate memory
+        *cpu_ptr = clSVMAlloc(context, CL_MEM_READ_WRITE, count, 0);
+
+        // use CL_MEM_USE_HOST_PTR for SVM buffer
+        cl_mem dm = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_USE_HOST_PTR, count, *cpu_ptr, &err);
         assert(err == CL_SUCCESS);
+
         al_info[*cpu_ptr] = {dm, count, *cpu_ptr, false, false, false, false, false};
     }
     void AMPMalloc(void **cpu_ptr, size_t count, void **data_ptr, bool isConst) {
         cl_int err;
-        cl_mem dm = clCreateBuffer(context, CL_MEM_READ_WRITE, count, NULL, &err);
+
+        // use clSVMAlloc to allocate memory
+        *cpu_ptr = clSVMAlloc(context, CL_MEM_READ_WRITE, count, 0);
+
+        // use CL_MEM_USE_HOST_PTR for SVM buffer
+        cl_mem dm = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_USE_HOST_PTR, count, *cpu_ptr, &err);
         assert(err == CL_SUCCESS);
-        *cpu_ptr = ::operator new(count);
+
         memcpy(*cpu_ptr, *data_ptr, count);
         al_info[*cpu_ptr] = {dm, count, *data_ptr, false, false, false, false, isConst};
     }
@@ -108,9 +120,10 @@ struct AMPAllocator
             if (mm.write) {
                 if (!mm.discard) {
                     void *dst = mm.dirty ? iter.first : mm.host;
-                    err = clEnqueueWriteBuffer(queue, mm.dm, CL_TRUE, 0,
-                                               mm.count, dst, 0, NULL, NULL);
-                    assert(err == CL_SUCCESS);
+                    // No longer need clEnqueueWriteBuffer in SVM case
+                    //err = clEnqueueWriteBuffer(queue, mm.dm, CL_TRUE, 0,
+                    //                           mm.count, dst, 0, NULL, NULL);
+                    //assert(err == CL_SUCCESS);
                     mm.discard = false;
                 }
                 // don't need to read const data back;
@@ -124,10 +137,11 @@ struct AMPAllocator
         for (auto& iter : al_info) {
             mm_info& mm = iter.second;
             if (mm.write) {
-                err = clEnqueueReadBuffer(queue, mm.dm, CL_TRUE, 0,
-                                          mm.count, iter.first, 0, NULL, NULL);
+                // No longer need clEnqueueReadBuffer in SVM case
+                //err = clEnqueueReadBuffer(queue, mm.dm, CL_TRUE, 0,
+                //                          mm.count, iter.first, 0, NULL, NULL);
                 mm.write = false;
-                assert(err == CL_SUCCESS);
+                //assert(err == CL_SUCCESS);
             }
         }
     }
@@ -138,9 +152,10 @@ struct AMPAllocator
     void AMPFree() {
         for (auto& iter : al_info) {
             mm_info mm = iter.second;
-            if (iter.first != mm.host)
-                ::operator delete(iter.first);
             clReleaseMemObject(mm.dm);
+            if (iter.first != mm.host)
+                // use SVM free
+                clSVMFree(context, iter.first);
         }
         al_info.clear();
     }
@@ -148,9 +163,10 @@ struct AMPAllocator
         mm_info mm = al_info[cpu_ptr];
         if (!mm.discard)
             synchronize(cpu_ptr);
-        if (cpu_ptr != mm.host)
-            ::operator delete(cpu_ptr);
         clReleaseMemObject(mm.dm);
+        if (cpu_ptr != mm.host)
+            // use SVM free
+            clSVMFree(context, cpu_ptr);
         al_info.erase(cpu_ptr);
     }
     ~AMPAllocator() {
