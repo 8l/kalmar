@@ -34,6 +34,11 @@ class Serialize {
     err = clSetKernelArg(k_, current_idx_++, sz, s);
     assert(err == CL_SUCCESS);
   }
+  void AppendSVMPointer(const void *s) {
+    cl_int err;
+    err = clSetKernelArgSVMPointer(k_, current_idx_++, s);
+    assert(err == CL_SUCCESS);
+  }
 #endif
  private:
 #if defined(CXXAMP_ENABLE_HSA)

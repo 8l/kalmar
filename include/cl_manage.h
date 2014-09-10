@@ -14,7 +14,6 @@
 
 struct mm_info
 {
-    cl_mem dm;
     size_t count;
     void *host;
     bool dirty;
@@ -57,25 +56,19 @@ struct AMPAllocator
 
         // use clSVMAlloc to allocate memory
         *cpu_ptr = clSVMAlloc(context, CL_MEM_READ_WRITE, count, 0);
+        assert(*cpu_ptr);
 
-        // use CL_MEM_USE_HOST_PTR for SVM buffer
-        cl_mem dm = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_USE_HOST_PTR, count, *cpu_ptr, &err);
-        assert(err == CL_SUCCESS);
-
-        al_info[*cpu_ptr] = {dm, count, *cpu_ptr, false, false, false, false, false};
+        al_info[*cpu_ptr] = {count, *cpu_ptr, false, false, false, false, false};
     }
     void AMPMalloc(void **cpu_ptr, size_t count, void **data_ptr, bool isConst) {
         cl_int err;
 
         // use clSVMAlloc to allocate memory
         *cpu_ptr = clSVMAlloc(context, CL_MEM_READ_WRITE, count, 0);
-
-        // use CL_MEM_USE_HOST_PTR for SVM buffer
-        cl_mem dm = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_USE_HOST_PTR, count, *cpu_ptr, &err);
-        assert(err == CL_SUCCESS);
+        assert(*cpu_ptr);
 
         memcpy(*cpu_ptr, *data_ptr, count);
-        al_info[*cpu_ptr] = {dm, count, *data_ptr, false, false, false, false, isConst};
+        al_info[*cpu_ptr] = {count, *data_ptr, false, false, false, false, isConst};
     }
     void setArray(void *p) {
         al_info[p].isArray = true;
@@ -121,9 +114,6 @@ struct AMPAllocator
                 if (!mm.discard) {
                     void *dst = mm.dirty ? iter.first : mm.host;
                     // No longer need clEnqueueWriteBuffer in SVM case
-                    //err = clEnqueueWriteBuffer(queue, mm.dm, CL_TRUE, 0,
-                    //                           mm.count, dst, 0, NULL, NULL);
-                    //assert(err == CL_SUCCESS);
                     mm.discard = false;
                 }
                 // don't need to read const data back;
@@ -138,21 +128,19 @@ struct AMPAllocator
             mm_info& mm = iter.second;
             if (mm.write) {
                 // No longer need clEnqueueReadBuffer in SVM case
-                //err = clEnqueueReadBuffer(queue, mm.dm, CL_TRUE, 0,
-                //                          mm.count, iter.first, 0, NULL, NULL);
                 mm.write = false;
                 //assert(err == CL_SUCCESS);
             }
         }
     }
-    cl_mem getmem(void *p) {
+    void* getmem(void *p) {
         al_info[p].write = true;
-        return al_info[p].dm;
+        // return pointer to SVM buffer
+        return al_info[p].host;
     }
     void AMPFree() {
         for (auto& iter : al_info) {
             mm_info mm = iter.second;
-            clReleaseMemObject(mm.dm);
             if (iter.first != mm.host)
                 // use SVM free
                 clSVMFree(context, iter.first);
@@ -163,7 +151,6 @@ struct AMPAllocator
         mm_info mm = al_info[cpu_ptr];
         if (!mm.discard)
             synchronize(cpu_ptr);
-        clReleaseMemObject(mm.dm);
         if (cpu_ptr != mm.host)
             // use SVM free
             clSVMFree(context, cpu_ptr);
@@ -253,8 +240,8 @@ class _data_host: public std::shared_ptr<T> {
 
   __attribute__((annotate("serialize")))
   void __cxxamp_serialize(Serialize& s) const {
-      cl_mem mm = getAllocator().getmem(std::shared_ptr<T>::get());
-      s.Append(sizeof(cl_mem), &mm);
+      void* mm = getAllocator().getmem(std::shared_ptr<T>::get());
+      s.AppendSVMPointer(mm);
   }
   __attribute__((annotate("user_deserialize")))
   explicit _data_host(__global T* t);
