@@ -94,6 +94,9 @@ struct AMPAllocator
         auto iter = mem_info.find(data);
         clReleaseMemObject(iter->second);
         mem_info.erase(iter);
+#if defined(CXXAMP_NV)
+        rwq.erase(data);
+#endif
     }
     ~AMPAllocator() {
         clReleaseCommandQueue(queue);
@@ -139,8 +142,7 @@ struct mm_info
     }
     void* get() { return dirty; }
     void disc() {
-        if (dirty != host)
-            dirty = host;
+        dirty = host;
         discard = true;
     }
     void serialize(Serialize& s) {
