@@ -44,17 +44,21 @@
 #endif
 
 #if defined(CXXAMP_ENABLE_HSA)
-//CLAMP
 extern int64_t get_global_id(unsigned int n) restrict(amp);
 extern int64_t get_local_id(unsigned int n) restrict(amp);
 extern int64_t get_group_id(unsigned int n) restrict(amp);
+extern __attribute__((noduplicate)) void barrier(unsigned int n) restrict(amp);
+#else
+extern "C" __attribute__((pure)) int get_global_id(int n) restrict(amp);
+extern "C" __attribute__((pure)) int get_local_id(int n) restrict(amp);
+extern "C" __attribute__((pure)) int get_group_id(int n) restrict(amp);
+extern "C" __attribute__((noduplicate)) void barrier(int n) restrict(amp);
+#endif
+
 #ifdef __APPLE__
 #define tile_static static __attribute__((section("clamp,opencl_local")))
 #else
 #define tile_static static __attribute__((section("clamp_opencl_local")))
-#endif
-extern __attribute__((noduplicate)) void barrier(unsigned int n) restrict(amp);
-//End CLAMP
 #endif
 
 namespace Concurrency {
@@ -244,20 +248,6 @@ public:
   static std::shared_ptr<accelerator> _gpu_accelerator;
   static std::shared_ptr<accelerator> _cpu_accelerator;
 };
-
-#if !defined(CXXAMP_ENABLE_HSA)
-//CLAMP
-extern "C" __attribute__((pure)) int get_global_id(int n) restrict(amp);
-extern "C" __attribute__((pure)) int get_local_id(int n) restrict(amp);
-extern "C" __attribute__((pure)) int get_group_id(int n) restrict(amp);
-#ifdef __APPLE__
-#define tile_static static __attribute__((section("clamp,opencl_local")))
-#else
-#define tile_static static __attribute__((section("clamp_opencl_local")))
-#endif
-extern "C" __attribute__((noduplicate)) void barrier(int n) restrict(amp);
-//End CLAMP
-#endif
 
 template <int N> class extent;
 template <int D0, int D1=0, int D2=0> class tiled_extent;
