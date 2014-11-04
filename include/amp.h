@@ -2342,36 +2342,18 @@ void copy(InputIter srcBegin, InputIter srcEnd, array<T, N>& dest) {
     }
 }
 
-template <typename InputIter, typename T>
-void copy(InputIter srcBegin, const array_view<T, 1>& dest) {
-    for (int i = 0; i < dest.get_extent()[0]; ++i) {
-        reinterpret_cast<T&>(dest[i]) = *srcBegin;
-        ++srcBegin;
-    }
-}
 template <typename InputIter, typename T, int N>
 void copy(InputIter srcBegin, const array_view<T, N>& dest) {
-    int adv = dest.get_extent().size() / dest.get_extent()[0];
-    for (int i = 0; i < dest.get_extent()[0]; ++i) {
-        Concurrency::copy(srcBegin, dest[i]);
-        std::advance(srcBegin, adv);
-    }
+    InputIter srcEnd = srcBegin;
+    std::advance(srcEnd, dest.get_extent().size());
+    Concurrency::copy(srcBegin, srcEnd, dest);
 }
 
-template <typename InputIter, typename T>
-void copy(InputIter srcBegin, array<T, 1>& dest) {
-    for (int i = 0; i < dest.get_extent()[0]; ++i) {
-        dest[i] = *srcBegin;
-        ++srcBegin;
-    }
-}
 template <typename InputIter, typename T, int N>
 void copy(InputIter srcBegin, array<T, N>& dest) {
-    int adv = dest.get_extent().size() / dest.get_extent()[0];
-    for (int i = 0; i < dest.get_extent()[0]; ++i) {
-        Concurrency::copy(srcBegin, dest[i]);
-        std::advance(srcBegin, adv);
-    }
+    InputIter srcEnd = srcBegin;
+    std::advance(srcEnd, dest.get_extent().size());
+    Concurrency::copy(srcBegin, srcEnd, dest);
 }
 
 template <typename OutputIter, typename T>
