@@ -2240,24 +2240,20 @@ namespace Concurrency {
 
 template <typename T>
 void copy(const array_view<const T, 1>& src, const array_view<T, 1>& dest) {
-    for (int i = 0; i < dest.get_extent()[0]; ++i)
-        dest[i] = src[i];
+    parallel_for_each(dest.get_extent(), [&](index<1> idx) restrict(amp) { dest(idx) = src(idx); });
 }
 template <typename T, int N>
 void copy(const array_view<const T, N>& src, const array_view<T, N>& dest) {
-    for (int i = 0; i < dest.get_extent()[0]; ++i)
-        Concurrency::copy(src[i], dest[i]);
+    parallel_for_each(dest.get_extent(), [&](index<N> idx) restrict(amp) { dest(idx) = src(idx); });
 }
 
 template <typename T>
 void copy(const array_view<T, 1>& src, const array_view<T, 1>& dest) {
-    for (int i = 0; i < dest.get_extent()[0]; ++i)
-        dest[i] = src[i];
+    parallel_for_each(dest.get_extent(), [&](index<1> idx) restrict(amp) { dest(idx) = src(idx); });
 }
 template <typename T, int N>
 void copy(const array_view<T, N>& src, const array_view<T, N>& dest) {
-    for (int i = 0; i < dest.get_extent()[0]; ++i)
-        Concurrency::copy(src[i], dest[i]);
+    parallel_for_each(dest.get_extent(), [&](index<N> idx) restrict(amp) { dest(idx) = src(idx); });
 }
 
 template <typename T>
