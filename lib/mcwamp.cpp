@@ -35,8 +35,8 @@ bool __mcw_cxxamp_compiled = false;
 #include <mach-o/getsect.h>
 extern "C" intptr_t _dyld_get_image_vmaddr_slide(uint32_t image_index);
 #else
-extern "C" char * kernel_source_[] asm ("_binary_kernel_cl_start") __attribute__((weak));
-extern "C" char * kernel_size_[] asm ("_binary_kernel_cl_size") __attribute__((weak));
+extern "C" char * kernel_source_[] asm ("_binary_kernel_cl_start");
+extern "C" char * kernel_source_end_[] asm ("_binary_kernel_cl_end");
 #endif
 
 std::vector<std::string> __mcw_kernel_names;
@@ -183,7 +183,9 @@ namespace Concurrency { namespace CLAMP {
             assert(sect->addr != 0);
             memcpy(kernel_source, (void*)(sect->addr + _dyld_get_image_vmaddr_slide(0)), kernel_size); // whatever
 #else
-            size_t kernel_size = (size_t)((void *)kernel_size_);
+            size_t kernel_size =
+                (ptrdiff_t)((void *)kernel_source_end_) -
+                (ptrdiff_t)((void *)kernel_source_);
             unsigned char *kernel_source = (unsigned char*)malloc(kernel_size+1);
             memcpy(kernel_source, kernel_source_, kernel_size);
 #endif
