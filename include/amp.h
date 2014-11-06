@@ -2258,46 +2258,48 @@ void copy(const array_view<T, N>& src, const array_view<T, N>& dest) {
 
 template <typename T>
 void copy(const array<T, 1>& src, const array_view<T, 1>& dest) {
-    for (int i = 0; i < dest.get_extent()[0]; ++i)
-        dest[i] = src[i];
+    array_view<const T, 1> cache(src);
+    parallel_for_each(dest.get_extent(), [&](index<1> idx) restrict(amp) { dest(idx) = cache(idx); });
 }
 template <typename T, int N>
 void copy(const array<T, N>& src, const array_view<T, N>& dest) {
-    for (int i = 0; i < dest.get_extent()[0]; ++i)
-        Concurrency::copy(src[i], dest[i]);
+    array_view<const T, N> cache(src);
+    parallel_for_each(dest.get_extent(), [&](index<N> idx) restrict(amp) { dest(idx) = cache(idx); });
 }
 
 template <typename T>
 void copy(const array<T, 1>& src, array<T, 1>& dest) {
-    for (int i = 0; i < dest.get_extent()[0]; ++i)
-        dest[i] = src[i];
+    array_view<const T, 1> src_(src);
+    array_view<T, 1> dest_(dest);
+    parallel_for_each(dest.get_extent(), [&](index<1> idx) restrict(amp) { dest_(idx) = src_(idx); });
 }
 template <typename T, int N>
 void copy(const array<T, N>& src, array<T, N>& dest) {
-    for (int i = 0; i < dest.get_extent()[0]; ++i)
-        Concurrency::copy(src[i], dest[i]);
+    array_view<const T, N> src_(src);
+    array_view<T, N> dest_(dest);
+    parallel_for_each(dest.get_extent(), [&](index<N> idx) restrict(amp) { dest_(idx) = src_(idx); });
 }
 
 template <typename T>
 void copy(const array_view<const T, 1>& src, array<T, 1>& dest) {
-    for (int i = 0; i < dest.get_extent()[0]; ++i)
-        dest[i] = src[i];
+    array_view<T, 1> cache(dest);
+    parallel_for_each(dest.get_extent(), [&](index<1> idx) restrict(amp) { cache(idx) = src(idx); });
 }
 template <typename T, int N>
 void copy(const array_view<const T, N>& src, array<T, N>& dest) {
-    for (int i = 0; i < dest.get_extent()[0]; ++i)
-        Concurrency::copy(src[i], dest[i]);
+    array_view<T, N> cache(dest);
+    parallel_for_each(dest.get_extent(), [&](index<N> idx) restrict(amp) { cache(idx) = src(idx); });
 }
 
 template <typename T>
 void copy(const array_view<T, 1>& src, array<T, 1>& dest) {
-    for (int i = 0; i < dest.get_extent()[0]; ++i)
-        dest[i] = src[i];
+    array_view<T, 1> cache(dest);
+    parallel_for_each(dest.get_extent(), [&](index<1> idx) restrict(amp) { cache(idx) = src(idx); });
 }
 template <typename T, int N>
 void copy(const array_view<T, N>& src, array<T, N>& dest) {
-    for (int i = 0; i < dest.get_extent()[0]; ++i)
-        Concurrency::copy(src[i], dest[i]);
+    array_view<T, N> cache(dest);
+    parallel_for_each(dest.get_extent(), [&](index<N> idx) restrict(amp) { cache(idx) = src(idx); });
 }
 
 // TODO: __global should not be allowed in CPU Path
