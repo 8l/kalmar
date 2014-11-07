@@ -2144,6 +2144,11 @@ public:
     static_assert(N == 1, "data() is only permissible on array views of rank 1");
     return reinterpret_cast<T*>(cache.get() + offset + index_base[0]);
   }
+  const T* get_base() const restrict(amp,cpu) {
+      return reinterpret_cast<T*>(cache.get() + offset);
+  }
+  extent<N> get_base_ext() const restrict(amp, cpu) { return extent_base; }
+  index<N> get_base_idx() const restrict(amp, cpu) { return index_base; }
 private:
   template <int K, typename Q> friend struct index_helper;
   template <int K, typename Q1, typename Q2> friend struct amp_helper;
@@ -2241,19 +2246,11 @@ namespace concurrency = Concurrency;
 
 namespace Concurrency {
 
-template <typename T>
-void copy(const array_view<const T, 1>& src, const array_view<T, 1>& dest) {
-    parallel_for_each(dest.get_extent(), [&](index<1> idx) restrict(amp) { dest(idx) = src(idx); });
-}
 template <typename T, int N>
 void copy(const array_view<const T, N>& src, const array_view<T, N>& dest) {
     parallel_for_each(dest.get_extent(), [&](index<N> idx) restrict(amp) { dest(idx) = src(idx); });
 }
 
-template <typename T>
-void copy(const array_view<T, 1>& src, const array_view<T, 1>& dest) {
-    parallel_for_each(dest.get_extent(), [&](index<1> idx) restrict(amp) { dest(idx) = src(idx); });
-}
 template <typename T, int N>
 void copy(const array_view<T, N>& src, const array_view<T, N>& dest) {
     parallel_for_each(dest.get_extent(), [&](index<N> idx) restrict(amp) { dest(idx) = src(idx); });
@@ -2272,22 +2269,12 @@ void copy(const array<T, N>& src, array<T, N>& dest) {
     parallel_for_each(dest.get_extent(), [&](index<N> idx) restrict(amp) { dest_(idx) = src_(idx); });
 }
 
-template <typename T>
-void copy(const array_view<const T, 1>& src, array<T, 1>& dest) {
-    array_view<T, 1> cache(dest);
-    parallel_for_each(dest.get_extent(), [&](index<1> idx) restrict(amp) { cache(idx) = src(idx); });
-}
 template <typename T, int N>
 void copy(const array_view<const T, N>& src, array<T, N>& dest) {
     array_view<T, N> cache(dest);
     parallel_for_each(dest.get_extent(), [&](index<N> idx) restrict(amp) { cache(idx) = src(idx); });
 }
 
-template <typename T>
-void copy(const array_view<T, 1>& src, array<T, 1>& dest) {
-    array_view<T, 1> cache(dest);
-    parallel_for_each(dest.get_extent(), [&](index<1> idx) restrict(amp) { cache(idx) = src(idx); });
-}
 template <typename T, int N>
 void copy(const array_view<T, N>& src, array<T, N>& dest) {
     array_view<T, N> cache(dest);
@@ -2308,6 +2295,17 @@ struct copy_helper
             ptr += offset;
         }
     }
+    static inline void copy_to_iter(IterType& destBegin, T* ptr, const extent<N>& ext,
+                                    const extent<N>& ext_base, const index<N>& idx_base,
+                                    int stride) {
+        int offset = stride / ext_base[id - 1];
+        ptr += idx_base[id - 1] * offset;
+        for (int i = 0; i < ext[id - 1]; i++) {
+            copy_helper<IterType, T, N, id + 1>::copy_to_iter(destBegin, ptr, ext, ext_base,
+                                                              idx_base, offset);
+            ptr += offset;
+        }
+    }
 };
 template <typename IterType, typename T, int N>
 struct copy_helper<IterType, T, N, N>
@@ -2317,6 +2315,12 @@ struct copy_helper<IterType, T, N, N>
                                       int stride) {
         std::copy_n(srcBegin, ext[N - 1], ptr + idx_base[N - 1]);
         std::advance(srcBegin, ext[N - 1]);
+    }
+    static inline void copy_to_iter(IterType& destBegin, T* ptr, const extent<N>& ext,
+                                      const extent<N>& ext_base, const index<N>& idx_base,
+                                      int stride) {
+        std::copy_n(ptr + idx_base[N - 1], ext[N - 1], destBegin);
+        std::advance(destBegin, ext[N - 1]);
     }
 };
 
@@ -2354,21 +2358,13 @@ void copy(InputIter srcBegin, array<T, N>& dest) {
     Concurrency::copy(srcBegin, srcEnd, dest);
 }
 
-template <typename OutputIter, typename T>
-void copy(const array_view<T, 1> &src, OutputIter destBegin) {
-    for (int i = 0; i < src.get_extent()[0]; ++i) {
-        *destBegin = (src.get_data(i));
-        destBegin++;
-    }
-}
-
 template <typename OutputIter, typename T, int N>
 void copy(const array_view<T, N> &src, OutputIter destBegin) {
-    int adv = src.get_extent().size() / src.get_extent()[0];
-    for (int i = 0; i < src.get_extent()[0]; ++i) {
-        copy(src[i], destBegin);
-        std::advance(destBegin, adv);
-    }
+    copy_helper<OutputIter, T, N, 1>::copy_to_iter(destBegin, src.get_base(),
+                                                  src.get_extent(),
+                                                  src.get_base_ext(),
+                                                  src.get_base_idx(),
+                                                  src.get_base_ext().size());
 }
 
 template <typename OutputIter, typename T, int N>
