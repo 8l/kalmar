@@ -1901,9 +1901,8 @@ public:
   // only get data do not synchronize
   __global const T& get_data(int i0) const restrict(amp,cpu) {
     static_assert(N == 1, "Rank must be 1");
-    index<1> idx(i0);
     __global T *ptr = reinterpret_cast<__global T*>(cache.get() + offset);
-    return ptr[amp_helper<N, index<N>, Concurrency::extent<N>>::flatten(idx + index_base, extent_base)];
+    return ptr[i0 + index_base[0]];
   }
   T* data() const restrict(amp,cpu) {
 #ifndef __GPU__
@@ -1912,6 +1911,11 @@ public:
     static_assert(N == 1, "data() is only permissible on array views of rank 1");
     return reinterpret_cast<T*>(cache.get() + offset + index_base[0]);
   }
+  T* get_base() const restrict(amp,cpu) {
+      return reinterpret_cast<T*>(cache.get() + offset);
+  }
+  extent<N> get_base_ext() const restrict(amp, cpu) { return extent_base; }
+  index<N> get_base_idx() const restrict(amp, cpu) { return index_base; }
 
 private:
   template <int K, typename Q> friend struct index_helper;
@@ -2133,9 +2137,8 @@ public:
   // only get data do not synchronize
   __global const T& get_data(int i0) const restrict(amp,cpu) {
     static_assert(N == 1, "Rank must be 1");
-    index<1> idx(i0);
     __global T *ptr = reinterpret_cast<__global T*>(cache.get() + offset);
-    return ptr[amp_helper<N, index<N>, Concurrency::extent<N>>::flatten(idx + index_base, extent_base)];
+    return ptr[i0 + index_base[0]];
   }
   const T* data() const restrict(amp,cpu) {
     static_assert(N == 1, "data() is only permissible on array views of rank 1");
@@ -2291,21 +2294,40 @@ void copy(const array_view<T, N>& src, array<T, N>& dest) {
     parallel_for_each(dest.get_extent(), [&](index<N> idx) restrict(amp) { cache(idx) = src(idx); });
 }
 
-// TODO: __global should not be allowed in CPU Path
-template <typename InputIter, typename T>
-void copy(InputIter srcBegin, InputIter srcEnd, const array_view<T, 1>& dest) {
-    for (int i = 0; i < dest.get_extent()[0]; ++i) {
-        reinterpret_cast<T&>(dest[i]) = *srcBegin;
-        ++srcBegin;
+template <typename IterType, typename T, int N, int id>
+struct copy_helper
+{
+    static inline void copy_from_iter(IterType& srcBegin, T* ptr, const extent<N>& ext,
+                                      const extent<N>& ext_base, const index<N>& idx_base,
+                                      int stride) {
+        int offset = stride / ext_base[id - 1];
+        ptr += idx_base[id - 1] * offset;
+        for (int i = 0; i < ext[id - 1]; i++) {
+            copy_helper<IterType, T, N, id + 1>::copy_from_iter(srcBegin, ptr, ext, ext_base,
+                                                    idx_base, offset);
+            ptr += offset;
+        }
     }
-}
+};
+template <typename IterType, typename T, int N>
+struct copy_helper<IterType, T, N, N>
+{
+    static inline void copy_from_iter(IterType& srcBegin, T* ptr, const extent<N>& ext,
+                                      const extent<N>& ext_base, const index<N>& idx_base,
+                                      int stride) {
+        std::copy_n(srcBegin, ext[N - 1], ptr + idx_base[N - 1]);
+        std::advance(srcBegin, ext[N - 1]);
+    }
+};
+
+
 template <typename InputIter, typename T, int N>
 void copy(InputIter srcBegin, InputIter srcEnd, const array_view<T, N>& dest) {
-    int adv = dest.get_extent().size() / dest.get_extent()[0];
-    for (int i = 0; i < dest.get_extent()[0]; ++i) {
-        Concurrency::copy(srcBegin, srcEnd, dest[i]);
-        std::advance(srcBegin, adv);
-    }
+    copy_helper<InputIter, T, N, 1>::copy_from_iter(srcBegin, dest.get_base(),
+                                                    dest.get_extent(),
+                                                    dest.get_base_ext(),
+                                                    dest.get_base_idx(),
+                                                    dest.get_base_ext().size());
 }
 
 
