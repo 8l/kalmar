@@ -2256,23 +2256,12 @@ void copy(const array_view<T, N>& src, const array_view<T, N>& dest) {
     parallel_for_each(dest.get_extent(), [&](index<N> idx) restrict(amp) { dest(idx) = src(idx); });
 }
 
-template <typename T>
-void copy(const array<T, 1>& src, const array_view<T, 1>& dest) {
-    array_view<const T, 1> cache(src);
-    parallel_for_each(dest.get_extent(), [&](index<1> idx) restrict(amp) { dest(idx) = cache(idx); });
-}
 template <typename T, int N>
 void copy(const array<T, N>& src, const array_view<T, N>& dest) {
     array_view<const T, N> cache(src);
     parallel_for_each(dest.get_extent(), [&](index<N> idx) restrict(amp) { dest(idx) = cache(idx); });
 }
 
-template <typename T>
-void copy(const array<T, 1>& src, array<T, 1>& dest) {
-    array_view<const T, 1> src_(src);
-    array_view<T, 1> dest_(dest);
-    parallel_for_each(dest.get_extent(), [&](index<1> idx) restrict(amp) { dest_(idx) = src_(idx); });
-}
 template <typename T, int N>
 void copy(const array<T, N>& src, array<T, N>& dest) {
     array_view<const T, N> src_(src);
@@ -2319,25 +2308,14 @@ void copy(InputIter srcBegin, InputIter srcEnd, const array_view<T, N>& dest) {
     }
 }
 
-// TODO: Boundary Check
-template <typename InputIter, typename T>
-void copy(InputIter srcBegin, InputIter srcEnd, array<T, 1>& dest) {
-#ifndef __GPU__
-    if( ( std::distance(srcBegin,srcEnd) <=0 )||( std::distance(srcBegin,srcEnd) < dest.get_extent()[0] ))
-      throw runtime_exception("errorMsg_throw ,copy between different types", 0);
-#endif
-    for (int i = 0; i < dest.get_extent()[0]; ++i) {
-        dest[i] = *srcBegin;
-        ++srcBegin;
-    }
-}
+
 template <typename InputIter, typename T, int N>
 void copy(InputIter srcBegin, InputIter srcEnd, array<T, N>& dest) {
-    int adv = dest.get_extent().size() / dest.get_extent()[0];
-    for (int i = 0; i < dest.get_extent()[0]; ++i) {
-        Concurrency::copy(srcBegin, srcEnd, dest[i]);
-        std::advance(srcBegin, adv);
-    }
+#ifndef __GPU__
+    if( ( std::distance(srcBegin,srcEnd) <=0 )||( std::distance(srcBegin,srcEnd) < dest.get_extent().size() ))
+      throw runtime_exception("errorMsg_throw ,copy between different types", 0);
+#endif
+    std::copy(srcBegin, srcEnd, dest.data());
 }
 
 template <typename InputIter, typename T, int N>
@@ -2371,22 +2349,12 @@ void copy(const array_view<T, N> &src, OutputIter destBegin) {
     }
 }
 
-template <typename OutputIter, typename T>
-void copy(const array<T, 1> &src, OutputIter destBegin) {
-    for (int i = 0; i < src.get_extent()[0]; ++i) {
-        *destBegin = src[i];
-        destBegin++;
-    }
-}
 template <typename OutputIter, typename T, int N>
 void copy(const array<T, N> &src, OutputIter destBegin) {
-    int adv = src.get_extent().size() / src.get_extent()[0];
-    for (int i = 0; i < src.get_extent()[0]; ++i) {
-        copy(src[i], destBegin);
-        std::advance(destBegin, adv);
-    }
+    const T* begin = src.data();
+    const T* end = begin + src.get_extent().size();
+    std::copy(begin, end, destBegin);
 }
-
 
 template <typename InputType, typename OutputType>
 completion_future __amp_copy_async_impl(InputType& src, OutputType& dst) {
