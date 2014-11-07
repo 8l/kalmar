@@ -35,8 +35,8 @@ bool __mcw_cxxamp_compiled = false;
 #include <mach-o/getsect.h>
 extern "C" intptr_t _dyld_get_image_vmaddr_slide(uint32_t image_index);
 #else
-extern "C" char * kernel_source_[] asm ("_binary_kernel_cl_start") __attribute__((weak));
-extern "C" char * kernel_size_[] asm ("_binary_kernel_cl_size") __attribute__((weak));
+extern "C" char * kernel_source_[] asm ("_binary_kernel_cl_start");
+extern "C" char * kernel_source_end_[] asm ("_binary_kernel_cl_end");
 #endif
 
 std::vector<std::string> __mcw_kernel_names;
@@ -183,7 +183,9 @@ namespace Concurrency { namespace CLAMP {
             assert(sect->addr != 0);
             memcpy(kernel_source, (void*)(sect->addr + _dyld_get_image_vmaddr_slide(0)), kernel_size); // whatever
 #else
-            size_t kernel_size = (size_t)((void *)kernel_size_);
+            size_t kernel_size =
+                (ptrdiff_t)((void *)kernel_source_end_) -
+                (ptrdiff_t)((void *)kernel_source_);
             unsigned char *kernel_source = (unsigned char*)malloc(kernel_size+1);
             memcpy(kernel_source, kernel_source_, kernel_size);
 #endif
@@ -192,16 +194,26 @@ namespace Concurrency { namespace CLAMP {
                 // Bitcode magic number. Assuming it's in SPIR
                 const unsigned char *ks = (const unsigned char *)kernel_source;
                 program = clCreateProgramWithBinary(context, 1, &device, &kernel_size, &ks, NULL, &err);
-                assert(err == CL_SUCCESS);
-                err = clBuildProgram(program, 1, &device, NULL, NULL, NULL);
-                assert(err == CL_SUCCESS);
+                if (err == CL_SUCCESS)
+                    err = clBuildProgram(program, 1, &device, NULL, NULL, NULL);
             } else {
                 // in OpenCL-C
                 const char *ks = (const char *)kernel_source;
                 program = clCreateProgramWithSource(context, 1, &ks, &kernel_size, &err);
+                if (err == CL_SUCCESS)
+                    err = clBuildProgram(program, 1, &device, "-D__ATTRIBUTE_WEAK__=", NULL, NULL);
+            }
+            if (err != CL_SUCCESS) {
+                size_t len;
+                err = clGetProgramBuildInfo(program, device, CL_PROGRAM_BUILD_LOG, 0, NULL, &len);
                 assert(err == CL_SUCCESS);
-                err = clBuildProgram(program, 1, &device, "-D__ATTRIBUTE_WEAK__=", NULL, NULL);
+                char *msg = new char[len + 1];
+                err = clGetProgramBuildInfo(program, device, CL_PROGRAM_BUILD_LOG, len, msg, NULL);
                 assert(err == CL_SUCCESS);
+                msg[len] = '\0';
+                std::cerr << msg;
+                delete [] msg;
+                exit(1);
             }
             __mcw_cxxamp_compiled = true;
             free(kernel_source);

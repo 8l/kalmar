@@ -9,7 +9,10 @@ execute_process(COMMAND git describe --abbrev=4 --dirty --always --tags
                 OUTPUT_VARIABLE GIT_VERSION
                 OUTPUT_STRIP_TRAILING_WHITESPACE)
 
-set(CLANG_URL "." CACHE STRING "CLANG URL")
+# set default cppamp-ng URL
+IF (NOT CLANG_URL)
+  SET(CLANG_URL "https://bitbucket.org/multicoreware/cppamp-ng.git" CACHE STRING "CLANG URL" FORCE)
+ENDIF (NOT CLANG_URL)
 set(CMAKE_MACOSX_RPATH 1)
 
 include (EnsureLLVMisPresent)
@@ -71,6 +74,10 @@ include_directories( ${PROJ_SEARCH_PATH} )
 LINK_DIRECTORIES( ${LLVM_LIB_DIR} )
 
 
+# set as release build by default
+IF (NOT CMAKE_BUILD_TYPE)
+  SET(CMAKE_BUILD_TYPE Release CACHE STRING "Choose the type of build, options are: Release Debug" FORCE)
+ENDIF(NOT CMAKE_BUILD_TYPE)
 
 # Turn on by default for now.
 option(CXXAMP_ENABLE_HSA "Use HSA Runtime as backend" OFF)
@@ -90,8 +97,8 @@ find_program (AMD_CLC NAME clc PATHS
         NO_DEFAULT_PATH)
 endif (CXXAMP_ENABLE_HSA)
 
-set(OPENCL_HEADER_DIR "/usr/include/CL" CACHE PATH "OpenCL Header Directory")
-set(OPENCL_LIBRARY_DIR "/usr/lib64/" CACHE PATH "OpenCL Library Directory")
+#set(OPENCL_HEADER_DIR "/usr/include/CL" CACHE PATH "OpenCL Header Directory")
+#set(OPENCL_LIBRARY_DIR "/usr/lib64/" CACHE PATH "OpenCL Library Directory")
 
 SET(FOO_BUILD_SHARED OFF CACHE BOOL "Build libfoo shared library")
 set(USE_OPENCL ON CACHE BOOL "Enable OpenCL")
@@ -101,7 +108,7 @@ if (NOT APPLE AND NOT OPENCL_HEADER)
   MESSAGE(FATAL_ERROR "OpenCL header not found. Use -DOPENCL_HEADER_DIR=<path_to_cl.h>.")
 endif(NOT APPLE AND NOT OPENCL_HEADER)
 
-find_library(OPENCL_LIBRARY OpenCL ${OPENCL_LIBRARY_DIR}/ PATHS /usr/lib)
+find_library(OPENCL_LIBRARY OpenCL ${OPENCL_LIBRARY_DIR}/ PATHS /usr/lib /opt/AMDAPP/lib/x86_64 /usr/local/cuda/lib64 )
 if (NOT APPLE AND NOT OPENCL_LIBRARY)
   MESSAGE(FATAL_ERROR "OpenCL library not found. Use -DOPENCL_LIBRARY_DIR=<path_to_libOpenCL.so>.")
 endif(NOT APPLE AND NOT OPENCL_LIBRARY)
