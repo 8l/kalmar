@@ -1916,6 +1916,7 @@ public:
   }
   extent<N> get_base_ext() const restrict(amp, cpu) { return extent_base; }
   index<N> get_base_idx() const restrict(amp, cpu) { return index_base; }
+  int get_offset() const restrict(amp, cpu) { return offset; }
 
 private:
   template <int K, typename Q> friend struct index_helper;
@@ -2149,6 +2150,7 @@ public:
   }
   extent<N> get_base_ext() const restrict(amp, cpu) { return extent_base; }
   index<N> get_base_idx() const restrict(amp, cpu) { return index_base; }
+  int get_offset() const restrict(amp, cpu) { return offset; }
 private:
   template <int K, typename Q> friend struct index_helper;
   template <int K, typename Q1, typename Q2> friend struct amp_helper;
@@ -2287,23 +2289,23 @@ struct copy_helper
     static inline void copy_from_iter(IterType& srcBegin, T* ptr, const extent<N>& ext,
                                       const extent<N>& ext_base, const index<N>& idx_base,
                                       int stride) {
-        int offset = stride / ext_base[id - 1];
+        int offset = stride / ext_base[id - 1], sz = ext[id - 1];
         ptr += idx_base[id - 1] * offset;
-        for (int i = 0; i < ext[id - 1]; i++) {
+        for (int i = 0; i < sz; i++) {
             copy_helper<IterType, T, N, id + 1>::copy_from_iter(srcBegin, ptr, ext, ext_base,
-                                                    idx_base, offset);
-            ptr += offset;
+                                                                idx_base, offset);
+            std::advance(ptr, offset);
         }
     }
     static inline void copy_to_iter(IterType& destBegin, T* ptr, const extent<N>& ext,
                                     const extent<N>& ext_base, const index<N>& idx_base,
                                     int stride) {
-        int offset = stride / ext_base[id - 1];
+        int offset = stride / ext_base[id - 1], sz = ext[id - 1];
         ptr += idx_base[id - 1] * offset;
-        for (int i = 0; i < ext[id - 1]; i++) {
+        for (int i = 0; i < sz; i++) {
             copy_helper<IterType, T, N, id + 1>::copy_to_iter(destBegin, ptr, ext, ext_base,
                                                               idx_base, offset);
-            ptr += offset;
+            std::advance(ptr, offset);
         }
     }
 };
@@ -2327,11 +2329,13 @@ struct copy_helper<IterType, T, N, N>
 
 template <typename InputIter, typename T, int N>
 void copy(InputIter srcBegin, InputIter srcEnd, const array_view<T, N>& dest) {
-    copy_helper<InputIter, T, N, 1>::copy_from_iter(srcBegin, dest.get_base(),
-                                                    dest.get_extent(),
-                                                    dest.get_base_ext(),
-                                                    dest.get_base_idx(),
-                                                    dest.get_base_ext().size());
+    extent<N> bext = dest.get_base_ext(), ext = dest.get_extent();
+    index<N> idx = dest.get_base_idx();
+    if (dest.get_offset() == 0 && ext == bext && idx == index<N>())
+        std::copy(srcBegin, srcEnd, dest.get_base());
+    else
+        copy_helper<InputIter, T, N, 1>::copy_from_iter(srcBegin, dest.get_base(),
+                                                        ext, bext, idx, bext.size());
 }
 
 
@@ -2360,11 +2364,13 @@ void copy(InputIter srcBegin, array<T, N>& dest) {
 
 template <typename OutputIter, typename T, int N>
 void copy(const array_view<T, N> &src, OutputIter destBegin) {
-    copy_helper<OutputIter, T, N, 1>::copy_to_iter(destBegin, src.get_base(),
-                                                  src.get_extent(),
-                                                  src.get_base_ext(),
-                                                  src.get_base_idx(),
-                                                  src.get_base_ext().size());
+    extent<N> bext = src.get_base_ext(), ext = src.get_extent();
+    index<N> idx = src.get_base_idx();
+    if (src.get_offset() == 0 && ext == bext && idx == index<N>())
+        std::copy_n(src.get_base(), ext.size(), destBegin);
+    else
+        copy_helper<OutputIter, T, N, 1>::copy_to_iter(destBegin, src.get_base(),
+                                                       ext, bext, idx, bext.size());
 }
 
 template <typename OutputIter, typename T, int N>
