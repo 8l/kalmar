@@ -127,6 +127,13 @@ public:
       mem_info.erase(iter);
     }
   }
+    void* alloc(int count) {
+        return ::operator new(count);
+    }
+    void dealloc(void *data) {
+        ::operator delete(data);
+    }
+
   ~HSAAMPAllocator() {
     // FIXME add more proper cleanup
     mem_info.clear();

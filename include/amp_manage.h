@@ -19,11 +19,15 @@ struct mm_info
     void *dirty;
     bool discard;
     mm_info(int count)
-        : count(count), host(::operator new(count)), device(host),
-        dirty(host), discard(false) { getAllocator()->init(device, count); }
+        : count(count), host( getAllocator()->alloc(count) ), device(host),
+        dirty(host), discard(false) { 
+        getAllocator()->init(device, count);
+    }
     mm_info(int count, void *src)
-        : count(count), host(src), device(::operator new(count)),
-        dirty(host), discard(false) { getAllocator()->init(device, count); }
+        : count(count), host(src), device( getAllocator()->alloc(count) ),
+        dirty(host), discard(false) {
+        getAllocator()->init(device, count);
+    }
     void synchronize() {
         if (dirty != host) {
             memmove(host, device, count);
@@ -54,7 +58,7 @@ struct mm_info
         if (host != device) {
             if (!discard)
                 synchronize();
-            ::operator delete(device);
+            getAllocator()->dealloc(device);
         }
     }
 };

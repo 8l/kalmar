@@ -71,7 +71,11 @@ public:
         assert(err == CL_SUCCESS);
         context = clCreateContext(0, 1, &device, NULL, NULL, &err);
         assert(err == CL_SUCCESS);
+        // to avoid annoying compile-time warning when compiled on OpenCL 2.0
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
         queue = clCreateCommandQueue(context, device, 0, &err);
+#pragma clang diagnostic pop
         assert(err == CL_SUCCESS);
     }
     void init(void *data, int count) {
@@ -93,6 +97,12 @@ public:
         auto iter = mem_info.find(data);
         clReleaseMemObject(iter->second);
         mem_info.erase(iter);
+    }
+    void* alloc(int count) {
+        return ::operator new(count);
+    }
+    void dealloc(void *data) {
+        ::operator delete(data);
     }
     ~OpenCLAMPAllocator() {
         clReleaseCommandQueue(queue);

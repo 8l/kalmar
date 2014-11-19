@@ -94,6 +94,12 @@ public:
         clReleaseMemObject(iter->second);
         mem_info.erase(iter);
     }
+    void* alloc(int count) {
+        return ::operator new(count);
+    }
+    void dealloc(void *data) {
+        ::operator delete(data);
+    }
     ~OpenCLAMPAllocator() {
         clReleaseCommandQueue(queue);
         clReleaseContext(context);
