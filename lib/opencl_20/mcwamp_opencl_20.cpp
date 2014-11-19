@@ -42,11 +42,6 @@ namespace CLAMP {
     void CLCompileKernels(cl_program&, cl_context&, cl_device_id&, void*, void*);
 }
 
-struct rw_info
-{
-    int count;
-    bool used;
-};
 class OpenCLAMPAllocator : public AMPAllocator
 {
 public:
@@ -114,7 +109,6 @@ public:
     cl_kernel        kernel;
     cl_command_queue queue;
     cl_program       program;
-    std::map<void *, rw_info> rwq;
 };
 
 static OpenCLAMPAllocator amp;
