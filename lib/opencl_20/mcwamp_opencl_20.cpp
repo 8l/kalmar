@@ -57,7 +57,8 @@ public:
         int i;
         err = clGetPlatformIDs(10, platform_id, &num_platforms);
         for (i = 0; i < num_platforms; i++) {
-            err = clGetDeviceIDs(platform_id[i], CL_DEVICE_TYPE_GPU, 1, &device, NULL);
+            // FIXME : AMD OpenCL 2.0 driver doesn't support CL_DEVICE_TYPE_GPU yet
+            err = clGetDeviceIDs(platform_id[i], CL_DEVICE_TYPE_CPU, 1, &device, NULL);
             if (err == CL_SUCCESS)
                 break;
         }
@@ -95,10 +96,10 @@ public:
         mem_info.erase(iter);
     }
     void* alloc(int count) {
-        return ::operator new(count);
+        return clSVMAlloc(context, CL_MEM_READ_WRITE, count, 0);
     }
     void dealloc(void *data) {
-        ::operator delete(data);
+        clSVMFree(context, data);
     }
     ~OpenCLAMPAllocator() {
         clReleaseCommandQueue(queue);
