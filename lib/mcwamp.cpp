@@ -348,7 +348,7 @@ RuntimeImpl* GetOrInitRuntime() {
           std::cerr << "Ignore unsupported CLAMP_RUNTIME environment variable: " << runtime_env << std::endl;
         }
       } else if (std::string("CL20") == runtime_env) {
-        if (opencl12_rt.detect()) {
+        if (opencl20_rt.detect()) {
           runtimeImpl = LoadOpenCL20Runtime();
         } else {
           std::cerr << "Ignore unsupported CLAMP_RUNTIME environment variable: " << runtime_env << std::endl;
