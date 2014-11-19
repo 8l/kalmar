@@ -59,14 +59,14 @@ if ( UNIX )
 endif()
 add_definitions( -DAMP_TESTS )
 
-# compile error related with device_vector
-#add_subdirectory( BinarySearchTest )
+# compile OK, failed some tests on HSA
+add_subdirectory( BinarySearchTest )
 
 # passed
 add_subdirectory( PairTest )
 
-# compile error related with device_vector
-#add_subdirectory( GenerateTest )
+# compile OK, failed some tests on HSA
+add_subdirectory( GenerateTest )
 
 # passed
 add_subdirectory( FillTest )
@@ -107,14 +107,14 @@ add_subdirectory( ReduceByKeyTest )
 # compile OK, crashed on HSA after passing some tests
 add_subdirectory( SortTest )
 
-# compile error related with device_vector
-#add_subdirectory( SortByKeyTest )
+# compile OK, failed some tests on HSA
+add_subdirectory( SortByKeyTest )
 
-# compile error
-#add_subdirectory( StableSortTest )
+# compile OK, crashed on HSA after passing some tests
+add_subdirectory( StableSortTest )
 
-# compile error related with device_vector
-#add_subdirectory( StableSortByKeyTest )
+# compile OK, failed some tests on HSA
+add_subdirectory( StableSortByKeyTest )
 
 # compile OK, crashed on HSA after passing some tests
 add_subdirectory( TransformTest )   
