@@ -72,14 +72,11 @@ public:
     }
     void init(void *data, int count) {
         if (count > 0) {
-            cl_int err;
-            cl_mem dm = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_USE_HOST_PTR, count, data, &err);
-            assert(err == CL_SUCCESS);
-            mem_info[data] = dm;
+            mem_info[data] = count;
         }
     }
     void append(void *kernel, int idx, void *data) {
-        PushArgImpl(kernel, idx, sizeof(cl_mem), &mem_info[data]);
+        PushArgImpl(kernel, idx, mem_info[data], data);
     }
     void write() {
     }
@@ -87,7 +84,6 @@ public:
     }
     void free(void *data) {
         auto iter = mem_info.find(data);
-        clReleaseMemObject(iter->second);
         mem_info.erase(iter);
     }
     void* alloc(int count) {
@@ -103,7 +99,7 @@ public:
         clReleaseProgram(program);
     }
 
-    std::map<void *, cl_mem> mem_info;
+    std::map<void *, size_t> mem_info;
     cl_context       context;
     cl_device_id     device;
     cl_kernel        kernel;
@@ -439,7 +435,11 @@ extern "C" void MatchKernelNamesImpl(char *fixed_name) {
 
 extern "C" void PushArgImpl(void *k_, int idx, size_t sz, const void *s) {
   cl_int err;
-  err = clSetKernelArg(static_cast<cl_kernel>(k_), idx, sz, s);
+  if (sz >= sizeof(void*)) {
+    err = clSetKernelArgSVMPointer(static_cast<cl_kernel>(k_), idx, s);
+  } else {
+    err = clSetKernelArg(static_cast<cl_kernel>(k_), idx, sz, s);
+  }
   assert(err == CL_SUCCESS);
 }
 
