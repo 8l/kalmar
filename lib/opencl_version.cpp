@@ -95,3 +95,14 @@ extern "C" int IsSPIRAvailable() {
   return IsCLExtensionAvailable("cl_khr_spir");
 }
 
+//
+// how to build this file as an executable:
+// clang++ -std=c++11 -I/opt/opencl/include/opencl2.0 opencl_version.cpp -DTEST_MODE=1 -lOpenCL
+//
+#if TEST_MODE
+int main() {
+  std::cout << "OpenCL version: " << GetOpenCLVersion() << std::endl;
+  std::cout << "Support SPIR: " << IsSPIRAvailable() << std::endl;
+  return 0;
+}
+#endif

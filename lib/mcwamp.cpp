@@ -231,6 +231,14 @@ private:
 
 
 /**
+ * \brief OpenCL .20 runtime detection
+ */
+class OpenCL20PlatformDetect : public OpenCLPlatformDetect {
+public:
+  OpenCL20PlatformDetect() : OpenCLPlatformDetect("OpenCL", "libmcwamp_opencl_20.so", "libOpenCL.so", cl_kernel_source, 20) {}
+};
+
+/**
  * \brief OpenCL SPIR 1.2 runtime detection
  */
 class SPIR12PlatformDetect : public OpenCLPlatformDetect {
@@ -292,6 +300,21 @@ static RuntimeImpl* LoadOpenCL12Runtime() {
   return runtimeImpl;
 }
 
+static RuntimeImpl* LoadOpenCL20Runtime() {
+  RuntimeImpl* runtimeImpl = nullptr;
+  // load OpenCL 2.0 C++AMP runtime
+  std::cout << "Use OpenCL 2.0 C++AMP runtime" << std::endl;
+  runtimeImpl = new RuntimeImpl("libmcwamp_opencl_20.so");
+  if (!runtimeImpl->m_RuntimeHandle) {
+    std::cerr << "Can't load OpenCL 2.0 C++AMP runtime!" << std::endl;
+    delete runtimeImpl;
+    exit(-1);
+  } else {
+    //std::cout << "OpenCL 1.2 C++AMP runtime loaded" << std::endl;
+  }
+  return runtimeImpl;
+}
+
 static RuntimeImpl* LoadHSARuntime() {
   RuntimeImpl* runtimeImpl = nullptr;
   // load HSA C++AMP runtime
@@ -311,6 +334,7 @@ RuntimeImpl* GetOrInitRuntime() {
   static RuntimeImpl* runtimeImpl = nullptr;
   if (runtimeImpl == nullptr) {
     HSAPlatformDetect hsa_rt;
+    OpenCL20PlatformDetect opencl20_rt;
     OpenCL12PlatformDetect opencl12_rt;
     OpenCL11PlatformDetect opencl11_rt;
 
@@ -320,6 +344,12 @@ RuntimeImpl* GetOrInitRuntime() {
       if (std::string("HSA") == runtime_env) {
         if (hsa_rt.detect()) {
           runtimeImpl = LoadHSARuntime();
+        } else {
+          std::cerr << "Ignore unsupported CLAMP_RUNTIME environment variable: " << runtime_env << std::endl;
+        }
+      } else if (std::string("CL20") == runtime_env) {
+        if (opencl12_rt.detect()) {
+          runtimeImpl = LoadOpenCL20Runtime();
         } else {
           std::cerr << "Ignore unsupported CLAMP_RUNTIME environment variable: " << runtime_env << std::endl;
         }
@@ -344,6 +374,8 @@ RuntimeImpl* GetOrInitRuntime() {
     if (runtimeImpl == nullptr) {
       if (hsa_rt.detect()) {
         runtimeImpl = LoadHSARuntime();
+      } else if (opencl20_rt.detect()) {
+        runtimeImpl = LoadOpenCL20Runtime();
       } else if (opencl12_rt.detect()) {
         runtimeImpl = LoadOpenCL12Runtime();
       } else if (opencl11_rt.detect()) {

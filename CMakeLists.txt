@@ -123,6 +123,13 @@ else ((NOT OPENCL_HEADER) OR (NOT OPENCL_LIBRARY))
     set (HAS_OPENCL12 0)
   endif (lines12)
 
+  file(STRINGS "${OPENCL_HEADER}/cl.h" lines20 REGEX "CL_VERSION_2_0[ \t]*1")
+  if (lines20)
+    set (HAS_OPENCL20 1)
+  else (lines20)
+    set (HAS_OPENCL20 0)
+  endif (lines20)
+
 endif ((NOT OPENCL_HEADER) OR (NOT OPENCL_LIBRARY))
 
 #################
