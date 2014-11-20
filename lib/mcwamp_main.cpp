@@ -94,7 +94,7 @@ void ldflags(void) {
     if (bolt_rewrite_mode) {
         std::cout << "-lampBolt.runtime.clang ";
     }
-    std::cout << "-Wl,--whole-archive -lmcwamp -Wl,--no-whole-archive ";
+    std::cout << "-Wl,--whole-archive -lmcwamp -lpthread -Wl,--no-whole-archive ";
 }
 
 void prefix(void) {

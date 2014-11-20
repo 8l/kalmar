@@ -27,6 +27,7 @@
 #include <algorithm>
 #include <set>
 #include <type_traits>
+#include <ucontext.h>
 // CLAMP
 #include <serialize.h>
 #define __global
@@ -701,6 +702,32 @@ private:
 #endif
 };
 
+template <typename Ker, typename Ti>
+void bar_wrapper(Ker *f, Ti *t)
+{
+    (*f)(*t);
+}
+struct barrier_t {
+    std::unique_ptr<ucontext_t[]> ctx;
+    int idx;
+    barrier_t (int a) :
+        ctx(new ucontext_t[a + 1]) {}
+    template <typename Ti, typename Ker, int S>
+    void setctx(int x, char (*stack)[S], Ker& f, Ti& tidx) {
+        getcontext(&ctx[x]);
+        ctx[x].uc_stack.ss_sp = *stack;
+        ctx[x].uc_stack.ss_size = S;
+        ctx[x].uc_link = &ctx[x - 1];
+        makecontext(&ctx[x], (void (*)(void))bar_wrapper<Ker, Ti>, 2, &f, &tidx);
+    }
+    void swap(int a, int b) {
+        swapcontext(&ctx[a], &ctx[b]);
+    }
+    void wait() {
+        --idx;
+        swapcontext(&ctx[idx + 1], &ctx[idx]);
+    }
+};
 
 #ifndef CLK_LOCAL_MEM_FENCE
 #define CLK_LOCAL_MEM_FENCE (1)
@@ -713,29 +740,39 @@ private:
 // C++AMP LPM 4.5
 class tile_barrier {
  public:
+     tile_barrier() restrict(amp,cpu) = default;
+  using pb_t = std::shared_ptr<barrier_t>;
+  pb_t pbar;
+  tile_barrier(pb_t pb) : pbar(pb) {}
+
   tile_barrier(const tile_barrier& other) restrict(amp,cpu) {}
   void wait() const restrict(amp) {
-#ifdef __GPU__
     wait_with_all_memory_fence();
-#endif
   }
   void wait_with_all_memory_fence() const restrict(amp) {
-#ifdef __GPU__
     amp_barrier(CLK_LOCAL_MEM_FENCE | CLK_GLOBAL_MEM_FENCE);
-#endif
   }
   void wait_with_global_memory_fence() const restrict(amp) {
-#ifdef __GPU__
     amp_barrier(CLK_GLOBAL_MEM_FENCE);
-#endif
   }
   void wait_with_tile_static_memory_fence() const restrict(amp) {
-#ifdef __GPU__
     amp_barrier(CLK_LOCAL_MEM_FENCE);
-#endif
   }
+
+  void wait() const restrict(cpu) {
+      pbar->wait();
+  }
+  void wait_with_all_memory_fence() const restrict(cpu) {
+      pbar->wait();
+  }
+  void wait_with_global_memory_fence() const restrict(cpu) {
+      pbar->wait();
+  }
+  void wait_with_tile_static_memory_fence() const restrict(cpu) {
+      pbar->wait();
+  }
+
  private:
-  tile_barrier() restrict(amp) {}
   template<int D0, int D1, int D2>
   friend class tiled_index;
 };
@@ -900,6 +937,8 @@ private:
 
 // C++AMP LPM 4.4.1
 
+struct bar_t;
+
 template <int D0, int D1=0, int D2=0>
 class tiled_index {
  public:
@@ -923,6 +962,21 @@ class tiled_index {
   static const int tile_dim1 = D1;
   static const int tile_dim2 = D2;
  private:
+  tiled_index& operator=(const tiled_index& other) {
+      const_cast<index<3>&>(global) = other.global;
+      const_cast<index<3>&>(local) = other.local;
+      const_cast<index<3>&>(tile) = other.tile;
+      const_cast<index<3>&>(tile_origin) = other.tile_origin;
+      const_cast<extent<3>&>(tile_extent) = other.tile_extent;
+      const_cast<tile_barrier&>(barrier) = other.barrier;
+      return *this;
+  }
+  //CLAMP
+  tiled_index(int a0, int a1, int a2, int b0, int b1, int b2,
+              int c0, int c1, int c2, tile_barrier& pb) restrict(amp,cpu)
+      : global(a2, a1, a0), local(b2, b1, b0), tile(c2, c1, c0),
+      tile_origin(a2 - b2, a1 - b1, a0 - b0), barrier(pb), tile_extent(D0, D1, D2) {}
+
   //CLAMP
   __attribute__((annotate("__cxxamp_opencl_index")))
   __attribute__((always_inline)) tiled_index() restrict(amp)
@@ -938,7 +992,8 @@ class tiled_index {
   {}
   template<int D0_, int D1_, int D2_, typename K>
   friend void parallel_for_each(tiled_extent<D0_, D1_, D2_>, const K&);
-
+  template<typename K, int D1_, int D2_, int D3_>
+  friend void partitioed_task_tile(const K&, const tiled_extent<D1_, D2_, D3_>&, int, bar_t&);
   template<int D0_, int D1_, int D2_, typename K>
   friend completion_future async_parallel_for_each(tiled_extent<D0_, D1_, D2_>, const K&);
 };
@@ -963,6 +1018,19 @@ class tiled_index<D0, 0, 0> {
   }
   static const int tile_dim0 = D0;
  private:
+  tiled_index& operator=(const tiled_index& other) {
+      const_cast<index<1>&>(global) = other.global;
+      const_cast<index<1>&>(local) = other.local;
+      const_cast<index<1>&>(tile) = other.tile;
+      const_cast<index<1>&>(tile_origin) = other.tile_origin;
+      const_cast<extent<1>&>(tile_extent) = other.tile_extent;
+      const_cast<tile_barrier&>(barrier) = other.barrier;
+      return *this;
+  }
+  //CLAMP
+  __attribute__((always_inline)) tiled_index(int a, int b, int c, tile_barrier& pb) restrict(amp, cpu)
+  : global(a), local(b), tile(c), tile_origin(a - b), barrier(pb), tile_extent(D0) {}
+
   //CLAMP
   __attribute__((annotate("__cxxamp_opencl_index")))
   __attribute__((always_inline)) tiled_index() restrict(amp)
@@ -976,7 +1044,8 @@ class tiled_index<D0, 0, 0> {
   {}
   template<int D, typename K>
   friend void parallel_for_each(tiled_extent<D>, const K&);
-
+  template<typename K, int D>
+  friend void partitioed_task_tile(const K&, const tiled_extent<D>&, int, bar_t&);
   template<int D, typename K>
   friend completion_future async_parallel_for_each(tiled_extent<D>, const K&);
 };
@@ -1002,6 +1071,20 @@ class tiled_index<D0, D1, 0> {
   static const int tile_dim0 = D0;
   static const int tile_dim1 = D1;
  private:
+  tiled_index& operator=(const tiled_index& other) {
+      const_cast<index<2>&>(global) = other.global;
+      const_cast<index<2>&>(local) = other.local;
+      const_cast<index<2>&>(tile) = other.tile;
+      const_cast<index<2>&>(tile_origin) = other.tile_origin;
+      const_cast<extent<2>&>(tile_extent) = other.tile_extent;
+      const_cast<tile_barrier&>(barrier) = other.barrier;
+      return *this;
+  }
+  //CLAMP
+  tiled_index(int a0, int a1, int b0, int b1, int c0, int c1, tile_barrier& tbar) restrict(amp, cpu)
+      : global(a1, a0), local(b1, b0), tile(c1, c0), tile_origin(a1 - b1, a0 - b0),
+      barrier(tbar), tile_extent(D0, D1) {}
+
   //CLAMP
   __attribute__((annotate("__cxxamp_opencl_index")))
   __attribute__((always_inline)) tiled_index() restrict(amp)
@@ -1016,7 +1099,8 @@ class tiled_index<D0, D1, 0> {
   {}
   template<int D0_, int D1_, typename K>
   friend void parallel_for_each(tiled_extent<D0_, D1_>, const K&);
-
+  template<typename K, int D1_, int D2_>
+  friend void partitioed_task_tile(const K&, const tiled_extent<D1_, D2_>&, int, bar_t&);
   template<int D0_, int D1_, typename K>
   friend completion_future async_parallel_for_each(tiled_extent<D0_, D1_>, const K&);
 };
