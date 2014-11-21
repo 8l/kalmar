@@ -746,6 +746,8 @@ class tile_barrier {
   tile_barrier(pb_t pb) : pbar(pb) {}
 
   tile_barrier(const tile_barrier& other) restrict(amp,cpu) {}
+
+#ifdef __GPU__
   void wait() const restrict(amp) {
     wait_with_all_memory_fence();
   }
@@ -758,7 +760,7 @@ class tile_barrier {
   void wait_with_tile_static_memory_fence() const restrict(amp) {
     amp_barrier(CLK_LOCAL_MEM_FENCE);
   }
-
+#else
   void wait() const restrict(cpu) {
       pbar->wait();
   }
@@ -771,6 +773,7 @@ class tile_barrier {
   void wait_with_tile_static_memory_fence() const restrict(cpu) {
       pbar->wait();
   }
+#endif
 
  private:
   template<int D0, int D1, int D2>
@@ -2577,8 +2580,8 @@ static inline int atomic_fetch_add(int *x, int y) restrict(amp,cpu) {
   return atomic_add_int(x, y);
 }
 #else
-extern unsigned atomic_fetch_add(unsigned *x, unsigned y) restrict(amp,cpu);
-extern int atomic_fetch_add(int *x, int y) restrict(amp, cpu);
+unsigned atomic_fetch_add(unsigned *x, unsigned y) restrict(amp,cpu);
+int atomic_fetch_add(int *x, int y) restrict(amp, cpu);
 #endif
 
 #ifdef __GPU__
@@ -2602,11 +2605,11 @@ static inline int atomic_fetch_inc(int *x) restrict(amp,cpu) {
 }
 #else
 
-extern int atomic_fetch_inc(int * _Dest) restrict(amp, cpu);
-extern unsigned atomic_fetch_inc(unsigned * _Dest) restrict(amp, cpu);
+int atomic_fetch_inc(int * _Dest) restrict(amp, cpu);
+unsigned atomic_fetch_inc(unsigned * _Dest) restrict(amp, cpu);
 
-extern int atomic_fetch_max(int * dest, int val) restrict(amp, cpu);
-extern unsigned int atomic_fetch_max(unsigned int * dest, unsigned int val) restrict(amp, cpu);
+int atomic_fetch_max(int * dest, int val) restrict(amp, cpu);
+unsigned int atomic_fetch_max(unsigned int * dest, unsigned int val) restrict(amp, cpu);
 
 #endif
 
