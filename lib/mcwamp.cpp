@@ -172,13 +172,11 @@ public:
 
     // detect if system runtime is available
     //std::cout << "dlopen(" << m_systemRuntimeLibrary << ")\n";
-    if (m_systemRuntimeLibrary != "") {
-        handle = dlopen(m_systemRuntimeLibrary.c_str(), RTLD_LAZY);
-        if (!handle) {
-            //std::cout << " system runtime not found" << std::endl;
-            //std::cout << dlerror() << std::endl;
-            return false;
-        }
+    handle = dlopen(m_systemRuntimeLibrary.c_str(), RTLD_LAZY);
+    if (!handle) {
+        //std::cout << " system runtime not found" << std::endl;
+        //std::cout << dlerror() << std::endl;
+        return false;
     }
     dlerror();  // clear any existing error
     //std::cout << " system runtime found...";
@@ -303,14 +301,6 @@ public:
   HSAPlatformDetect() : PlatformDetect("HSA", "libmcwamp_hsa.so", "libhsa-runtime64.so", hsa_kernel_source) {}
 };
 
-/**
- * \brief CPU runtime detection
- */
-class CPUPlatformDetect : public PlatformDetect {
-public:
-  CPUPlatformDetect() : PlatformDetect("CPU", "libmcwamp_cpu.so", "", nullptr) {}
-};
-
 static RuntimeImpl* LoadOpenCL11Runtime() {
   RuntimeImpl* runtimeImpl = nullptr;
   // load OpenCL 1.1 C++AMP runtime
@@ -375,7 +365,6 @@ RuntimeImpl* GetOrInitRuntime() {
     HSAPlatformDetect hsa_rt;
     OpenCL12PlatformDetect opencl12_rt;
     OpenCL11PlatformDetect opencl11_rt;
-    CPUPlatformDetect cpu_rt;
 
     // force use certain C++AMP runtime from CLAMP_RUNTIME environment variable
     char* runtime_env = getenv("CLAMP_RUNTIME");
@@ -399,12 +388,9 @@ RuntimeImpl* GetOrInitRuntime() {
               std::cerr << "Ignore unsupported CLAMP_RUNTIME environment variable: " << runtime_env << std::endl;
           }
       } else if(std::string("CPU") == runtime_env) {
-          if (cpu_rt.detect()) {
-              runtimeImpl = LoadCPURuntime();
-              runtimeImpl->set_cpu();
-          } else {
-              std::cerr << "Ignore unsupported CLAMP_RUNTIME environment variable: " << runtime_env << std::endl;
-          }
+          // CPU runtime should be available
+          runtimeImpl = LoadCPURuntime();
+          runtimeImpl->set_cpu();
       } else {
         std::cerr << "Ignore unknown CLAMP_RUNTIME environment variable:" << runtime_env << std::endl;
       }
