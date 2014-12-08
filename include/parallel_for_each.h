@@ -33,8 +33,8 @@ struct cpu_helper
 template <typename Kernel, int K>
 struct cpu_helper<K, Kernel, K>
 {
-    static inline void call(const Kernel& k, index<K>& idx, const extent<K>& ext) restrict(amp,cpu) {
-        k(idx);
+    static inline void call(const Kernel& k, const index<K>& idx, const extent<K>& ext) restrict(amp,cpu) {
+        (const_cast<Kernel&>(k))(idx);
     }
 };
 
@@ -585,8 +585,8 @@ __attribute__((noinline,used)) void parallel_for_each(
       std::vector<std::thread> th(NTHREAD);
       for (int i = 0; i < NTHREAD; ++i)
           th[i] = std::thread(partitioed_task_tile<Kernel, D0, D1>,
-                                                                std::cref(f), std::cref(compute_domain),
-                                                                i, std::ref(gbar));
+                              std::cref(f), std::cref(compute_domain),
+                              i, std::ref(gbar));
       for (auto& t : th)
           t.join();
   } else
@@ -664,8 +664,8 @@ __attribute__((noinline,used)) void parallel_for_each(
       std::vector<std::thread> th(NTHREAD);
       for (int i = 0; i < NTHREAD; ++i)
           th[i] = std::thread(partitioed_task_tile<Kernel, D0, D1, D2>,
-                                                                std::cref(f), std::cref(compute_domain),
-                                                                i, std::ref(gbar));
+                              std::cref(f), std::cref(compute_domain),
+                              i, std::ref(gbar));
       for (auto& t : th)
           t.join();
   } else
