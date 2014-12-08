@@ -103,12 +103,20 @@ endif (CXXAMP_ENABLE_HSA)
 SET(FOO_BUILD_SHARED OFF CACHE BOOL "Build libfoo shared library")
 set(USE_OPENCL ON CACHE BOOL "Enable OpenCL")
 
-find_path(OPENCL_HEADER cl.h ${OPENCL_HEADER_DIR} PATHS /usr/include/CL /opt/AMDAPP/include/CL /usr/local/cuda/include/CL )
+# Look for cl.h in OPENCL_HEADER_DIR too.
+# Beware that CMake start searching in some system directory first, so if
+# an OpenCL version is found there, OPENCL_HEADER_DIR cannot be used to
+# override it. TODO: fix this...
+find_path(OPENCL_HEADER cl.h PATHS ${OPENCL_HEADER_DIR} /usr/include/CL /opt/AMDAPP/include/CL /usr/local/cuda/include/CL)
 if (NOT APPLE AND NOT OPENCL_HEADER)
   MESSAGE(FATAL_ERROR "OpenCL header not found. Use -DOPENCL_HEADER_DIR=<path_to_cl.h>.")
 endif(NOT APPLE AND NOT OPENCL_HEADER)
 
-find_library(OPENCL_LIBRARY OpenCL ${OPENCL_LIBRARY_DIR}/ PATHS /usr/lib /opt/AMDAPP/lib/x86_64 /usr/local/cuda/lib64 )
+# Look for OpenCL directrory in OPENCL_LIBRARY_DIR too.
+# Beware that CMake start searching in some system directory first, so if
+# an OpenCL version is found there, OPENCL_LIBRARY_DIR cannot be used to
+# override it. TODO: fix this...
+find_library(OPENCL_LIBRARY OpenCL PATHS ${OPENCL_LIBRARY_DIR} /usr/lib /opt/AMDAPP/lib/x86_64 /usr/local/cuda/lib64)
 if (NOT APPLE AND NOT OPENCL_LIBRARY)
   MESSAGE(FATAL_ERROR "OpenCL library not found. Use -DOPENCL_LIBRARY_DIR=<path_to_libOpenCL.so>.")
 endif(NOT APPLE AND NOT OPENCL_LIBRARY)
