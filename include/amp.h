@@ -745,7 +745,7 @@ class tile_barrier {
   pb_t pbar;
   tile_barrier(pb_t pb) : pbar(pb) {}
 
-  tile_barrier(const tile_barrier& other) restrict(amp,cpu) {}
+  tile_barrier(const tile_barrier& other) restrict(amp,cpu) : pbar(other.pbar) {}
 
 #ifdef __GPU__
   void wait() const restrict(amp) {
