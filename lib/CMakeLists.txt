@@ -1,4 +1,4 @@
-add_mcwamp_library(mcwamp mcwamp.cpp)
+add_mcwamp_library(mcwamp mcwamp.cpp md5.cpp)
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 add_mcwamp_executable(clamp-config mcwamp_main.cpp)
 install(TARGETS mcwamp clamp-config
