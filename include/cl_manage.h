@@ -45,6 +45,16 @@ struct AMPAllocator
         assert(err == CL_SUCCESS);
         queue = clCreateCommandQueue(context, device, 0, &err);
         assert(err == CL_SUCCESS);
+
+      // C++ AMP specifications
+      // The maximum number of tiles per dimension will be no less than 65535.
+      // The maximum number of threads in a tile will be no less than 1024.
+      // In 3D tiling, the maximal value of D0 will be no less than 64.
+      err = clGetDeviceInfo(device, CL_DEVICE_MAX_WORK_ITEM_DIMENSIONS, sizeof(cl_uint), &dimensions, NULL);
+      assert(err == CL_SUCCESS);
+      maxSizes = new size_t[dimensions];
+      err = clGetDeviceInfo(device, CL_DEVICE_MAX_WORK_ITEM_SIZES, sizeof(size_t) * dimensions, maxSizes, NULL);
+      assert(err == CL_SUCCESS);
     }
     void init(void *data, int count) {
         if (count > 0) {
@@ -99,6 +109,7 @@ struct AMPAllocator
         clReleaseProgram(program);
         clReleaseCommandQueue(queue);
         clReleaseContext(context);
+        delete[] maxSizes;
     }
     std::map<void *, cl_mem> mem_info;
     cl_context       context;
@@ -108,6 +119,8 @@ struct AMPAllocator
 #if defined(CXXAMP_NV)
     std::map<void *, rw_info> rwq;
 #endif
+    cl_uint dimensions;
+    size_t* maxSizes;
 };
 
 AMPAllocator& getAllocator();
