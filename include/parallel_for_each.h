@@ -133,7 +133,7 @@ static inline void mcw_cxxamp_launch_kernel(size_t *ext,
 #if defined(CXXAMP_NV)
   aloc.read();
 #endif
-  clFinish(aloc.queue);
+  //clFinish(aloc.queue);
 #endif //CXXAMP_ENABLE_HSA
 #endif // __GPU__
 }
