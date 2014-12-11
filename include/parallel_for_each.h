@@ -103,10 +103,8 @@ static inline void mcw_cxxamp_launch_kernel(size_t *ext,
       // The maximum number of tiles per dimension will be no less than 65535.
       // The maximum number of threads in a tile will be no less than 1024.
       // In 3D tiling, the maximal value of D0 will be no less than 64.
-      cl_uint dimensions;
-      err = clGetDeviceInfo(aloc.device, CL_DEVICE_MAX_WORK_ITEM_DIMENSIONS, sizeof(cl_uint), &dimensions, NULL);
-      size_t *maxSizes = new size_t[dimensions];
-      err = clGetDeviceInfo(aloc.device, CL_DEVICE_MAX_WORK_ITEM_SIZES, sizeof(size_t) * dimensions, maxSizes, NULL);
+      cl_uint dimensions = aloc.dimensions;
+      size_t *maxSizes = aloc.maxSizes;
       bool is = true;
       int threads_per_tile = 1;
       for(int i = 0; local_size && i < dim_ext; i++) {
