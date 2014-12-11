@@ -38,7 +38,7 @@ static inline std::string mcw_cxxamp_fixnames(char *f) restrict(cpu) {
         out.append("_EC_");
       }
     }
-    CLAMP::MatchKernelNames(out);
+    //CLAMP::MatchKernelNames(out);
     return out;
 }
 
