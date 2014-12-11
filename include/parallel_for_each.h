@@ -94,9 +94,9 @@ static inline void mcw_cxxamp_launch_kernel(size_t *ext,
   int* foo = reinterpret_cast<int*>(&Kernel::__cxxamp_trampoline);
   std::string transformed_kernel_name =
       mcw_cxxamp_fixnames(f.__cxxamp_trampoline_name());
-  aloc.kernel = clCreateKernel(aloc.program, transformed_kernel_name.c_str(), &err);
+  cl_kernel kernel = clCreateKernel(aloc.program, transformed_kernel_name.c_str(), &err);
   assert(err == CL_SUCCESS);
-  Concurrency::Serialize s(aloc.kernel);
+  Concurrency::Serialize s(kernel);
   f.__cxxamp_serialize(s);
   {
       // C++ AMP specifications
@@ -128,12 +128,12 @@ static inline void mcw_cxxamp_launch_kernel(size_t *ext,
 #if defined(CXXAMP_NV)
   aloc.write();
 #endif
-  err = clEnqueueNDRangeKernel(aloc.queue, aloc.kernel, dim_ext, NULL, ext, local_size, 0, NULL, NULL);
+  err = clEnqueueNDRangeKernel(aloc.queue, kernel, dim_ext, NULL, ext, local_size, 0, NULL, NULL);
   assert(err == CL_SUCCESS);
 #if defined(CXXAMP_NV)
   aloc.read();
 #endif
-  err = clReleaseKernel(aloc.kernel);
+  err = clReleaseKernel(kernel);
   assert(err == CL_SUCCESS);
   //clFinish(aloc.queue);
 #endif //CXXAMP_ENABLE_HSA

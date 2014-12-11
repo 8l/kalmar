@@ -103,7 +103,6 @@ struct AMPAllocator
     std::map<void *, cl_mem> mem_info;
     cl_context       context;
     cl_device_id     device;
-    cl_kernel        kernel;
     cl_command_queue queue;
     cl_program       program;
 #if defined(CXXAMP_NV)
