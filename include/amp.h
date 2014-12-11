@@ -1321,9 +1321,11 @@ public:
   __attribute__((annotate("serialize")))
   void __cxxamp_serialize(Serialize& s) const {
     array<T, N>* p_arr = (array<T, N>*)m_arr;
+/*
     if (p_arr && p_arr->pav && p_arr->pav->get_accelerator() == accelerator(accelerator::cpu_accelerator)) {
       throw runtime_exception(__errorMsg_UnsupportedAccelerator, E_FAIL);
     }    
+*/
   }
 private:
   void* m_arr;
@@ -2210,25 +2212,31 @@ void parallel_for_each(tiled_extent<D0> compute_domain, const Kernel& f);
 
 template <int N, typename Kernel>
 void parallel_for_each(const accelerator_view& accl_view, extent<N> compute_domain, const Kernel& f){
+/*
     if (accl_view.get_accelerator() == accelerator(accelerator::cpu_accelerator)) {
       throw runtime_exception(__errorMsg_UnsupportedAccelerator, E_FAIL);
     }
+*/
     parallel_for_each(compute_domain, f);
 }
 
 template <int D0, int D1, int D2, typename Kernel>
 void parallel_for_each(const accelerator_view& accl_view, tiled_extent<D0,D1,D2> compute_domain, const Kernel& f) {
+/*
     if (accl_view.get_accelerator() == accelerator(accelerator::cpu_accelerator)) {
       throw runtime_exception(__errorMsg_UnsupportedAccelerator, E_FAIL);
     }
+*/
     parallel_for_each(compute_domain, f);
 }
 
 template <int D0, int D1, typename Kernel>
 void parallel_for_each(const accelerator_view& accl_view, tiled_extent<D0,D1> compute_domain, const Kernel& f) {
+/*
     if (accl_view.get_accelerator() == accelerator(accelerator::cpu_accelerator)) {
       throw runtime_exception(__errorMsg_UnsupportedAccelerator, E_FAIL);
     }
+*/
     parallel_for_each(compute_domain, f);
 }
 
