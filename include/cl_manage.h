@@ -96,10 +96,9 @@ struct AMPAllocator
         mem_info.erase(iter);
     }
     ~AMPAllocator() {
+        clReleaseProgram(program);
         clReleaseCommandQueue(queue);
         clReleaseContext(context);
-        clReleaseKernel(kernel);
-        clReleaseProgram(program);
     }
     std::map<void *, cl_mem> mem_info;
     cl_context       context;
