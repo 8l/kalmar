@@ -272,11 +272,19 @@ __attribute__((noinline,used)) void parallel_for_each(
         static_cast<size_t>(compute_domain[N - 2]),
         static_cast<size_t>(compute_domain[N - 3])};
     if (CLAMP::is_cpu()) {
+        {
+          Concurrency::Serialize s(nullptr, 0);
+          f.__cxxamp_serialize(s);
+        }
         std::vector<std::thread> th(NTHREAD);
         for (int i = 0; i < NTHREAD; ++i)
             th[i] = std::thread(partitioed_task<Kernel, N>, std::cref(f), std::cref(compute_domain), i);
         for (auto& t : th)
             t.join();
+        {
+          Concurrency::Serialize s(nullptr);
+          f.__cxxamp_serialize(s);
+        }
     } else {
         const pfe_wrapper<N, Kernel> _pf(compute_domain, f);
         mcw_cxxamp_launch_kernel<pfe_wrapper<N, Kernel>, 3>(ext, NULL, _pf);
@@ -333,11 +341,19 @@ __attribute__((noinline,used)) void parallel_for_each(
   if (static_cast<size_t>(compute_domain[0]) > 4294967295L) 
     throw invalid_compute_domain("Extent size too large.");
   if (CLAMP::is_cpu()) {
+      {
+          Concurrency::Serialize s(nullptr, 0);
+          f.__cxxamp_serialize(s);
+      }
       std::vector<std::thread> th(NTHREAD);
       for (int i = 0; i < NTHREAD; ++i)
           th[i] = std::thread(partitioed_task<Kernel, 1>, std::cref(f), std::cref(compute_domain), i);
       for (auto& t : th)
           t.join();
+      {
+          Concurrency::Serialize s(nullptr);
+          f.__cxxamp_serialize(s);
+      }
   } else {
       size_t ext = compute_domain[0];
       mcw_cxxamp_launch_kernel<Kernel, 1>(&ext, NULL, f);
@@ -385,11 +401,19 @@ __attribute__((noinline,used)) void parallel_for_each(
   if (static_cast<size_t>(compute_domain[0]) * static_cast<size_t>(compute_domain[1]) > 4294967295L)
     throw invalid_compute_domain("Extent size too large.");
   if (CLAMP::is_cpu()) {
+      {
+          Concurrency::Serialize s(nullptr, 0);
+          f.__cxxamp_serialize(s);
+      }
       std::vector<std::thread> th(NTHREAD);
       for (int i = 0; i < NTHREAD; ++i)
           th[i] = std::thread(partitioed_task<Kernel, 2>, std::cref(f), std::cref(compute_domain), i);
       for (auto& t : th)
           t.join();
+      {
+          Concurrency::Serialize s(nullptr);
+          f.__cxxamp_serialize(s);
+      }
   } else {
       size_t ext[2] = {static_cast<size_t>(compute_domain[1]),
           static_cast<size_t>(compute_domain[0])};
@@ -445,11 +469,19 @@ __attribute__((noinline,used)) void parallel_for_each(
   if (static_cast<size_t>(compute_domain[0]) * static_cast<size_t>(compute_domain[1]) * static_cast<size_t>(compute_domain[2]) > 4294967295L)
     throw invalid_compute_domain("Extent size too large.");
   if (CLAMP::is_cpu()) {
+      {
+          Concurrency::Serialize s(nullptr, 0);
+          f.__cxxamp_serialize(s);
+      }
       std::vector<std::thread> th(NTHREAD);
       for (int i = 0; i < NTHREAD; ++i)
           th[i] = std::thread(partitioed_task<Kernel, 3>, std::cref(f), std::cref(compute_domain), i);
       for (auto& t : th)
           t.join();
+      {
+          Concurrency::Serialize s(nullptr);
+          f.__cxxamp_serialize(s);
+      }
   } else {
       size_t ext[3] = {static_cast<size_t>(compute_domain[2]),
           static_cast<size_t>(compute_domain[1]),
@@ -512,6 +544,10 @@ __attribute__((noinline,used)) void parallel_for_each(
     throw invalid_compute_domain("Extent can't be evenly divisble by tile size.");
   }
   if (CLAMP::is_cpu()) {
+      {
+          Concurrency::Serialize s(nullptr, 0);
+          f.__cxxamp_serialize(s);
+      }
       int k = D0 / NTHREAD;
       k = k > 0 ? k : 1;
       bar_t gbar(D0/k);
@@ -520,6 +556,10 @@ __attribute__((noinline,used)) void parallel_for_each(
           th[i] = std::thread(partitioed_task_tile<Kernel, D0>, std::cref(f), std::cref(compute_domain), i, std::ref(gbar));
       for (auto& t : th)
           t.join();
+      {
+          Concurrency::Serialize s(nullptr);
+          f.__cxxamp_serialize(s);
+      }
   } else
       mcw_cxxamp_launch_kernel<Kernel, 1>(&ext, &tile, f);
 #else //ifndef __GPU__
@@ -579,6 +619,10 @@ __attribute__((noinline,used)) void parallel_for_each(
     throw invalid_compute_domain("Extent can't be evenly divisble by tile size.");
   }
   if (CLAMP::is_cpu()) {
+      {
+          Concurrency::Serialize s(nullptr, 0);
+          f.__cxxamp_serialize(s);
+      }
       int k = D0 / NTHREAD;
       k = k > 0 ? k : 1;
       bar_t gbar(D0/k);
@@ -589,6 +633,10 @@ __attribute__((noinline,used)) void parallel_for_each(
                               i, std::ref(gbar));
       for (auto& t : th)
           t.join();
+      {
+          Concurrency::Serialize s(nullptr);
+          f.__cxxamp_serialize(s);
+      }
   } else
       mcw_cxxamp_launch_kernel<Kernel, 2>(ext, tile, f);
 #else //ifndef __GPU__
@@ -658,6 +706,10 @@ __attribute__((noinline,used)) void parallel_for_each(
     throw invalid_compute_domain("Extent can't be evenly divisble by tile size.");
   }
   if (CLAMP::is_cpu()) {
+      {
+          Concurrency::Serialize s(nullptr, 0);
+          f.__cxxamp_serialize(s);
+      }
       int k = D0 / NTHREAD;
       k = k > 0 ? k : 1;
       bar_t gbar(D0/k);
@@ -668,6 +720,10 @@ __attribute__((noinline,used)) void parallel_for_each(
                               i, std::ref(gbar));
       for (auto& t : th)
           t.join();
+      {
+          Concurrency::Serialize s(nullptr);
+          f.__cxxamp_serialize(s);
+      }
   } else
       mcw_cxxamp_launch_kernel<Kernel, 3>(ext, tile, f);
 #else //ifndef __GPU__

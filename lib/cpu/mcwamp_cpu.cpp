@@ -15,7 +15,7 @@
 #include <amp_allocator.h>
 #include <amp_runtime.h>
 
-extern "C" void PushArgImpl(void *ker, int idx, size_t sz, const void *v);
+extern "C" void PushArgImpl(void *ker, int idx, size_t sz, const void *v) {}
 
 namespace Concurrency {
 
