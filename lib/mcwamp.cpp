@@ -25,6 +25,7 @@ std::shared_ptr<accelerator> accelerator::_gpu_accelerator = std::make_shared<ac
 std::shared_ptr<accelerator> accelerator::_cpu_accelerator = std::make_shared<accelerator>(accelerator::cpu_accelerator);
 std::shared_ptr<accelerator> accelerator::_default_accelerator = nullptr;
 
+std::map<cl_device_id, struct DimMaxSize> Clid2DimSizeMap;
 AMPAllocator& getAllocator()
 {
     static AMPAllocator amp;
