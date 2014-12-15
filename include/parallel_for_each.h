@@ -24,6 +24,7 @@ extern std::future<void> HSALaunchKernelAsync(void *ker, size_t, size_t *global,
 #endif
 extern void MatchKernelNames( std::string & );
 extern void CompileKernels(cl_program& program, cl_context& context, cl_device_id& device);
+extern cl_kernel GetKernelObject(cl_program& prog, std::string& name);
 }
 static inline std::string mcw_cxxamp_fixnames(char *f) restrict(cpu) {
     std::string s(f);
@@ -94,8 +95,7 @@ static inline void mcw_cxxamp_launch_kernel(size_t *ext,
   int* foo = reinterpret_cast<int*>(&Kernel::__cxxamp_trampoline);
   std::string transformed_kernel_name =
       mcw_cxxamp_fixnames(f.__cxxamp_trampoline_name());
-  cl_kernel kernel = clCreateKernel(aloc.program, transformed_kernel_name.c_str(), &err);
-  assert(err == CL_SUCCESS);
+  cl_kernel kernel = CLAMP::GetKernelObject(aloc.program, transformed_kernel_name);
   Concurrency::Serialize s(kernel);
   f.__cxxamp_serialize(s);
   {
@@ -131,8 +131,9 @@ static inline void mcw_cxxamp_launch_kernel(size_t *ext,
 #if defined(CXXAMP_NV)
   aloc.read();
 #endif
-  err = clReleaseKernel(kernel);
-  assert(err == CL_SUCCESS);
+  // kernel objects will be released when AMPAllocator is destructed.
+  //err = clReleaseKernel(kernel);
+  //assert(err == CL_SUCCESS);
   //clFinish(aloc.queue);
 #endif //CXXAMP_ENABLE_HSA
 #endif // __GPU__
