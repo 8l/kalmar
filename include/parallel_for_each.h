@@ -131,10 +131,11 @@ static inline void mcw_cxxamp_launch_kernel(size_t *ext,
 #if defined(CXXAMP_NV)
   aloc.read();
 #endif
+<<<<<<< HEAD
   // kernel objects will be released when AMPAllocator is destructed.
   //err = clReleaseKernel(kernel);
   //assert(err == CL_SUCCESS);
-  //clFinish(aloc.queue);
+  clFinish(aloc.queue);
 #endif //CXXAMP_ENABLE_HSA
 #endif // __GPU__
 }
