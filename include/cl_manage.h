@@ -20,6 +20,11 @@ struct rw_info
     bool used;
 };
 #endif
+struct amp_obj
+{
+    cl_mem dm;
+    int count;
+};
 
 struct DimMaxSize {
   cl_uint dimensions;
@@ -72,20 +77,24 @@ struct AMPAllocator
       Clid2DimSizeMap[device] = d;
     }
     void init(void *data, int count) {
-        if (count > 0) {
-            cl_int err;
+        auto iter = mem_info.find(data);
+        if (iter == std::end(mem_info)) {
+            if (count > 0) {
+                cl_int err;
 #if defined(CXXAMP_NV)
-            cl_mem dm = clCreateBuffer(context, CL_MEM_READ_WRITE, count, NULL, &err);
-            rwq[data] = {count, false};
+                cl_mem dm = clCreateBuffer(context, CL_MEM_READ_WRITE, count, NULL, &err);
+                rwq[data] = {count, false};
 #else
-            cl_mem dm = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_USE_HOST_PTR, count, data, &err);
+                cl_mem dm = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_USE_HOST_PTR, count, data, &err);
 #endif
-            assert(err == CL_SUCCESS);
-            mem_info[data] = dm;
-        }
+                assert(err == CL_SUCCESS);
+                mem_info[data] = {dm, 1};
+            }
+        } else
+            ++iter->second.count;
     }
     void append(Serialize& s, void *data) {
-        s.Append(sizeof(cl_mem), &mem_info[data]);
+        s.Append(sizeof(cl_mem), &mem_info[data].dm);
 #if defined(CXXAMP_NV)
         rwq[data].used = true;
 #endif
@@ -96,7 +105,7 @@ struct AMPAllocator
         for (auto& it : rwq) {
             rw_info& rw = it.second;
             if (rw.used) {
-                err = clEnqueueWriteBuffer(queue, mem_info[it.first], CL_TRUE, 0,
+                err = clEnqueueWriteBuffer(queue, mem_info[it.first].dm, CL_TRUE, 0,
                                            rw.count, it.first, 0, NULL, NULL);
                 assert(err == CL_SUCCESS);
             }
@@ -107,7 +116,7 @@ struct AMPAllocator
         for (auto& it : rwq) {
             rw_info& rw = it.second;
             if (rw.used) {
-                err = clEnqueueReadBuffer(queue, mem_info[it.first], CL_TRUE, 0,
+                err = clEnqueueReadBuffer(queue, mem_info[it.first].dm, CL_TRUE, 0,
                                           rw.count, it.first, 0, NULL, NULL);
                 assert(err == CL_SUCCESS);
                 rw.used = false;
@@ -117,8 +126,10 @@ struct AMPAllocator
 #endif
     void free(void *data) {
         auto iter = mem_info.find(data);
-        clReleaseMemObject(iter->second);
-        mem_info.erase(iter);
+        if (iter != std::end(mem_info) && --iter->second.count == 0) {
+            clReleaseMemObject(iter->second.dm);
+            mem_info.erase(iter);
+        }
     }
     ~AMPAllocator() {
         clReleaseProgram(program);
@@ -130,7 +141,7 @@ struct AMPAllocator
         // Release all kernel objects associated with 'program'
         CLAMP::ReleaseKernelObject();
     }
-    std::map<void *, cl_mem> mem_info;
+    std::map<void *, amp_obj> mem_info;
     cl_context       context;
     cl_device_id     device;
     cl_command_queue queue;
@@ -144,49 +155,23 @@ AMPAllocator& getAllocator();
 
 struct mm_info
 {
-    size_t count;
-    void *host;
-    void *device;
-    void *dirty;
-    bool discard;
+    void *data;
+    bool free;
     mm_info(int count)
-        : count(count), host(aligned_alloc(0x1000, count)), device(host),
-        dirty(host), discard(false) { getAllocator().init(device, count); }
+        : data(aligned_alloc(0x1000, count)), free(true) { getAllocator().init(data, count); }
     mm_info(int count, void *src)
-        : count(count), host(src), device(aligned_alloc(0x1000, count)),
-        dirty(host), discard(false) { getAllocator().init(device, count); }
-    void synchronize() {
-        if (dirty != host) {
-            memmove(host, device, count);
-            dirty = host;
-        }
-    }
-    void refresh() {
-        if (device != host)
-            memmove(device, host, count);
-    }
-    void* get() { return dirty; }
-    void disc() {
-        if (dirty != host)
-            dirty = host;
-        discard = true;
-    }
+        : data(src), free(false) { getAllocator().init(data, count); }
+    void synchronize() {}
+    void refresh() {}
+    void* get() { return data; }
+    void disc() {}
     void serialize(Serialize& s) {
-        if (dirty == host && device != host) {
-            if (!discard)
-                refresh();
-            dirty = device;
-        }
-        discard = false;
-        getAllocator().append(s, device);
+        getAllocator().append(s, data);
     }
     ~mm_info() {
-        getAllocator().free(device);
-        if (host != device) {
-            if (!discard)
-                synchronize();
-            ::operator delete(device);
-        }
+        getAllocator().free(data);
+        if (free)
+            ::operator delete(data);
     }
 };
 
