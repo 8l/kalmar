@@ -173,6 +173,24 @@ void MatchKernelNames(std::string& fixed_name) {
   }
   return;
 }
+typedef std::map<std::string, cl_kernel> KernelObject;
+std::map<cl_program, KernelObject> Pro2KernelObject;
+cl_kernel GetKernelObject(cl_program& prog, std::string& name) {
+  assert (name.c_str());
+  KernelObject& KO = Pro2KernelObject[prog];
+  if (KO[name] == 0) {
+    cl_int err;
+    KO[name] = clCreateKernel(prog, name.c_str(), &err);
+    assert(err == CL_SUCCESS);
+  }
+  return KO[name];
+}
+void ReleaseKernelObject() {
+  for(const auto& it : Pro2KernelObject)
+    for(const auto& itt : it.second) 
+      if(itt.second)
+        clReleaseKernel(itt.second);
+}
 }
 }
 namespace Concurrency { namespace CLAMP {

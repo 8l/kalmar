@@ -26,6 +26,9 @@ struct DimMaxSize {
   size_t* maxSizes;
 };
 extern std::map<cl_device_id, struct DimMaxSize> Clid2DimSizeMap;
+namespace CLAMP {
+extern void ReleaseKernelObject();
+}
 
 struct AMPAllocator
 {
@@ -124,6 +127,8 @@ struct AMPAllocator
         for(const auto& it : Clid2DimSizeMap)
           if(it.second.maxSizes)
             delete[] it.second.maxSizes;
+        // Release all kernel objects associated with 'program'
+        CLAMP::ReleaseKernelObject();
     }
     std::map<void *, cl_mem> mem_info;
     cl_context       context;
