@@ -1667,6 +1667,9 @@ public:
       }
 
   operator std::vector<T>() const {
+#ifndef __GPU__
+      m_device.synchronize();
+#endif
       T *begin = reinterpret_cast<T*>(m_device.get()),
         *end = reinterpret_cast<T*>(m_device.get() + extent.size());
       return std::vector<T>(begin, end);
@@ -1678,6 +1681,7 @@ public:
     if(cpu_access_type == access_type_none) {
       //return reinterpret_cast<T*>(NULL);
     }      
+    m_device.synchronize();
 #endif
     return reinterpret_cast<T*>(m_device.get());
   }
@@ -2151,6 +2155,9 @@ public:
     return ptr[amp_helper<N, index<N>, Concurrency::extent<N>>::flatten(idx + index_base, extent_base)];
   }
   const T* data() const restrict(amp,cpu) {
+#ifndef __GPU__
+    synchronize();
+#endif
     static_assert(N == 1, "data() is only permissible on array views of rank 1");
     return reinterpret_cast<T*>(cache.get() + offset + index_base[0]);
   }
