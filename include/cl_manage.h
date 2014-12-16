@@ -167,10 +167,16 @@ struct mm_info
     bool discard;
     mm_info(int count)
         : count(count), host(aligned_alloc(0x1000, count)), device(host),
-        dirty(host), discard(false) { getAllocator().init(device, count); }
+        dirty(host), discard(false) {
+        getAllocator().init(device, count);
+    }
     mm_info(int count, void *src)
         : count(count), host(src), device(aligned_alloc(0x1000, count)),
-        dirty(host), discard(false) { getAllocator().init(device, count); }
+        dirty(host), discard(false) {
+        memcpy(device, src, count);
+        getAllocator().init(device, count);
+    }
+
     void synchronize() {
         if (dirty != host) {
             memmove(host, device, count);
@@ -189,8 +195,8 @@ struct mm_info
     }
     void serialize(Serialize& s) {
         if (dirty == host && device != host) {
-            if (!discard)
-                refresh();
+            //if (!discard)
+            //    refresh();
             dirty = device;
         }
         discard = false;
