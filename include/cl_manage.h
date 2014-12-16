@@ -156,7 +156,6 @@ struct mm_info
         : count(count), host(src), device(::operator new(count)),
         dirty(host), discard(false) { getAllocator().init(device, count); }
     void synchronize() {
-        clFinish(getAllocator().queue);
         if (dirty != host) {
             memmove(host, device, count);
             dirty = host;
