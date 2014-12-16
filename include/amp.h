@@ -1823,7 +1823,8 @@ public:
   typename projection_helper<T, N>::result_type
       operator[] (int i) const restrict(amp,cpu) {
 #ifndef __GPU__
-      synchronize();
+      // FIXME a LOT of synchronize() calls would happen here
+      //synchronize();
 #endif
           return projection_helper<T, N>::project(*this, i);
       }
