@@ -21,6 +21,8 @@ struct rw_info
 };
 #endif
 
+#define QUEUE_SIZE (2)
+
 struct DimMaxSize {
   cl_uint dimensions;
   size_t* maxSizes;
@@ -32,6 +34,13 @@ extern void ReleaseKernelObject();
 
 struct AMPAllocator
 {
+    inline cl_command_queue getQueue() {
+        //printf("use queue %d\n", queue_id);
+        cl_command_queue ret = queue[queue_id];
+        queue_id = (queue_id + 1) % QUEUE_SIZE;
+        return ret;
+    }
+
     AMPAllocator() {
         cl_uint          num_platforms;
         cl_int           err;
@@ -53,8 +62,11 @@ struct AMPAllocator
         assert(err == CL_SUCCESS);
         context = clCreateContext(0, 1, &device, NULL, NULL, &err);
         assert(err == CL_SUCCESS);
-        queue = clCreateCommandQueue(context, device, 0, &err);
-        assert(err == CL_SUCCESS);
+        for (i = 0; i < QUEUE_SIZE; ++i) {
+          queue[i] = clCreateCommandQueue(context, device, 0, &err);
+          assert(err == CL_SUCCESS);
+        }
+        queue_id = 0;
 
       // C++ AMP specifications
       // The maximum number of tiles per dimension will be no less than 65535.
@@ -96,7 +108,7 @@ struct AMPAllocator
         for (auto& it : rwq) {
             rw_info& rw = it.second;
             if (rw.used) {
-                err = clEnqueueWriteBuffer(queue, mem_info[it.first], CL_TRUE, 0,
+                err = clEnqueueWriteBuffer(getQueue(), mem_info[it.first], CL_TRUE, 0,
                                            rw.count, it.first, 0, NULL, NULL);
                 assert(err == CL_SUCCESS);
             }
@@ -107,7 +119,7 @@ struct AMPAllocator
         for (auto& it : rwq) {
             rw_info& rw = it.second;
             if (rw.used) {
-                err = clEnqueueReadBuffer(queue, mem_info[it.first], CL_TRUE, 0,
+                err = clEnqueueReadBuffer(getQueue(), mem_info[it.first], CL_TRUE, 0,
                                           rw.count, it.first, 0, NULL, NULL);
                 assert(err == CL_SUCCESS);
                 rw.used = false;
@@ -122,7 +134,9 @@ struct AMPAllocator
     }
     ~AMPAllocator() {
         clReleaseProgram(program);
-        clReleaseCommandQueue(queue);
+        for (int i = 0; i < QUEUE_SIZE; ++i) {
+          clReleaseCommandQueue(queue[i]);
+        }
         clReleaseContext(context);
         for(const auto& it : Clid2DimSizeMap)
           if(it.second.maxSizes)
@@ -133,7 +147,8 @@ struct AMPAllocator
     std::map<void *, cl_mem> mem_info;
     cl_context       context;
     cl_device_id     device;
-    cl_command_queue queue;
+    cl_command_queue queue[QUEUE_SIZE];
+    int              queue_id;
     cl_program       program;
 #if defined(CXXAMP_NV)
     std::map<void *, rw_info> rwq;

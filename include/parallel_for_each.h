@@ -127,7 +127,8 @@ static inline void mcw_cxxamp_launch_kernel(size_t *ext,
   aloc.write();
 #endif
   cl_event kn_event;
-  err = clEnqueueNDRangeKernel(aloc.queue, kernel, dim_ext, NULL, ext, local_size, 0, NULL, &kn_event);
+  cl_command_queue queue = aloc.getQueue();
+  err = clEnqueueNDRangeKernel( queue, kernel, dim_ext, NULL, ext, local_size, 0, NULL, &kn_event);
   assert(err == CL_SUCCESS);
 #if defined(CXXAMP_NV)
   aloc.read();
@@ -136,11 +137,11 @@ static inline void mcw_cxxamp_launch_kernel(size_t *ext,
   //err = clReleaseKernel(kernel);
   //assert(err == CL_SUCCESS);
   #if 0
-  clFinish(aloc.queue);
+  clFinish( queue );
   #else
   // Provided the queued kernels are independent, we could flush them
   // We should consider to use multiple queues
-  err = clFlush( aloc.queue );
+  err = clFlush( queue );
   {
     cl_int status = CL_QUEUED;
     while(status != CL_COMPLETE) {
