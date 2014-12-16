@@ -2269,8 +2269,9 @@ void copy(const array_view<const T, N>& src, const array_view<T, N>& dest) {
 
 template <typename T>
 void copy(const array_view<T, 1>& src, const array_view<T, 1>& dest) {
-    for (int i = 0; i < dest.get_extent()[0]; ++i)
-        dest[i] = src[i];
+    T* ptr_dest = dest.data();
+    T* ptr_src = src.data();
+    memcpy(ptr_dest, ptr_src, sizeof(T)*dest.get_extent()[0]);
 }
 template <typename T, int N>
 void copy(const array_view<T, N>& src, const array_view<T, N>& dest) {
@@ -2280,8 +2281,9 @@ void copy(const array_view<T, N>& src, const array_view<T, N>& dest) {
 
 template <typename T>
 void copy(const array<T, 1>& src, const array_view<T, 1>& dest) {
-    for (int i = 0; i < dest.get_extent()[0]; ++i)
-        dest[i] = src[i];
+    T* ptr_dest = dest.data();
+    T* ptr_src = src.data();
+    memcpy(ptr_dest, ptr_src, sizeof(T)*dest.get_extent()[0]);
 }
 template <typename T, int N>
 void copy(const array<T, N>& src, const array_view<T, N>& dest) {
