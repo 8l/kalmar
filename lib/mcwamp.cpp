@@ -49,6 +49,8 @@ extern "C" char * kernel_source_end_[] asm ("_binary_kernel_cl_end");
 std::vector<std::string> __mcw_kernel_names;
 namespace Concurrency {
 namespace CLAMP {
+typedef std::map<std::string, cl_kernel> KernelObject;
+std::map<cl_program, KernelObject> Pro2KernelObject;
     static inline void getKernelNames(cl_program& prog) {
         std::vector<std::string> n;
         cl_uint kernel_num = 0;
@@ -60,13 +62,23 @@ namespace CLAMP {
             cl_kernel *kl = new cl_kernel[kernel_num];
             ret = clCreateKernelsInProgram(prog, kernel_num + 1, kl, &kernel_num);
             if (ret == CL_SUCCESS) {
+                KernelObject& KO = Pro2KernelObject[prog];
                 std::map<std::string, std::string> aMap;
                 for (unsigned i = 0; i < unsigned(kernel_num); ++i) {
                     char s[1024] = { 0x0 };
                     size_t size;
                     ret = clGetKernelInfo(kl[i], CL_KERNEL_FUNCTION_NAME, 1024, s, &size);
                     n.push_back(std::string (s));
+                    KO[std::string (s)] = kl[i];
+                    // Some analysis tool will post warnings about not releasing kernel object in time, 
+                    // for example, 
+                    //   Warning: Memory leak detected [Ref = 1, Handle = 0x12f1420]: Object created by clCreateKernelsInProgram
+                    //   Warning: Memory leak detected [Ref = 1, Handle = 0x12f17a0]: Object created by clCreateProgramWithBinary
+                    // However these won't be taken as memory leaks in here since all created kenrel objects 
+                    // will be released in ReleaseKernelObjects and the Ref count will be reset to 0
+                    #if 0
                     clReleaseKernel(kl[i]);
+                    #endif
                 }
             }
             delete [] kl;
@@ -173,8 +185,6 @@ void MatchKernelNames(std::string& fixed_name) {
   }
   return;
 }
-typedef std::map<std::string, cl_kernel> KernelObject;
-std::map<cl_program, KernelObject> Pro2KernelObject;
 cl_kernel GetKernelObject(cl_program& prog, std::string& name) {
   assert (name.c_str());
   KernelObject& KO = Pro2KernelObject[prog];
