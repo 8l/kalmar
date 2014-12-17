@@ -594,10 +594,7 @@ array<T, N>::array(const array_view<const T, N>& src, accelerator_view av,
 #ifndef __GPU__
 
 template <typename T, int N>
-void array_view<T, N>::synchronize() const {
-    if(cache.get())
-        cache.synchronize();
-}
+void array_view<T, N>::synchronize() const {}
 
 template <typename T, int N>
 completion_future array_view<T, N>::synchronize_async() const {
@@ -616,12 +613,7 @@ array_view<T, N>::array_view(const Concurrency::extent<N>& ext) restrict(amp,cpu
     : extent(ext), cache(ext.size()), offset(0), extent_base(ext) {}
 
 template <typename T, int N>
-void array_view<T, N>::refresh() const {
-    assert(cache.get());
-    assert(extent == extent_base && "Only support non-sectioned view");
-    assert(offset == 0 && "Only support non-sectioned view");
-    cache.refresh();
-}
+void array_view<T, N>::refresh() const {}
 
 #else // GPU implementations
 
@@ -637,10 +629,7 @@ array_view<T,N>::array_view(const Concurrency::extent<N>& ext,
 #ifndef __GPU__
 
 template <typename T, int N>
-void array_view<const T, N>::synchronize() const {
-  if(cache.get())
-      cache.synchronize();
-}
+void array_view<const T, N>::synchronize() const { }
 
 template <typename T, int N>
 completion_future array_view<const T, N>::synchronize_async() const {
@@ -656,12 +645,7 @@ array_view<const T, N>::array_view(const Concurrency::extent<N>& ext,
     offset(0), extent_base(ext) {}
 
 template <typename T, int N>
-void array_view<const T, N>::refresh() const {
-    assert(cache.get());
-    assert(extent == extent_base && "Only support non-sectioned view");
-    assert(offset == 0 && "Only support non-sectioned view");
-    cache.refresh();
-}
+void array_view<const T, N>::refresh() const {}
 
 #else // GPU implementations
 
