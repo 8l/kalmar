@@ -118,7 +118,7 @@ struct AMPAllocator
         for (auto& it : rwq) {
             rw_info& rw = it.second;
             if (rw.used) {
-                err = clEnqueueWriteBuffer(queue, mem_info[it.first].dm, CL_TRUE, 0,
+                err = clEnqueueWriteBuffer(getQueue(), mem_info[it.first].dm, CL_TRUE, 0,
                                            rw.count, it.first, 0, NULL, NULL);
                 assert(err == CL_SUCCESS);
             }
@@ -129,7 +129,7 @@ struct AMPAllocator
         for (auto& it : rwq) {
             rw_info& rw = it.second;
             if (rw.used) {
-                err = clEnqueueReadBuffer(queue, mem_info[it.first].dm, CL_TRUE, 0,
+                err = clEnqueueReadBuffer(getQueue(), mem_info[it.first].dm, CL_TRUE, 0,
                                           rw.count, it.first, 0, NULL, NULL);
                 assert(err == CL_SUCCESS);
                 rw.used = false;
@@ -181,9 +181,7 @@ struct mm_info
     void refresh() {}
     void* get() { return data; }
     void disc() {}
-    void serialize(Serialize& s) {
-        getAllocator().append(s, data);
-    }
+    void serialize(Serialize& s) { getAllocator().append(s, data); }
     ~mm_info() {
         getAllocator().free(data);
         if (free)
