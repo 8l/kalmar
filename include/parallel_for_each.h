@@ -126,7 +126,9 @@ static inline void mcw_cxxamp_launch_kernel(size_t *ext,
 #if defined(CXXAMP_NV)
   aloc.write();
 #endif
-  err = clEnqueueNDRangeKernel(aloc.queue, kernel, dim_ext, NULL, ext, local_size, 0, NULL, NULL);
+  cl_event kn_event;
+  cl_command_queue queue = aloc.getQueue();
+  err = clEnqueueNDRangeKernel( queue, kernel, dim_ext, NULL, ext, local_size, 0, NULL, &kn_event);
   assert(err == CL_SUCCESS);
 #if defined(CXXAMP_NV)
   aloc.read();
@@ -134,7 +136,21 @@ static inline void mcw_cxxamp_launch_kernel(size_t *ext,
   // kernel objects will be released when AMPAllocator is destructed.
   //err = clReleaseKernel(kernel);
   //assert(err == CL_SUCCESS);
-  clFinish(aloc.queue);
+  #if 0
+  clFinish( queue );
+  #else
+  // Provided the queued kernels are independent, we could flush them
+  // We should consider to use multiple queues
+  err = clFlush( queue );
+  {
+    cl_int status = CL_QUEUED;
+    while(status != CL_COMPLETE) {
+      err = clGetEventInfo(kn_event, CL_EVENT_COMMAND_EXECUTION_STATUS, sizeof(cl_int),&status,NULL);
+      assert(err == CL_SUCCESS);
+    }
+    err = clReleaseEvent(kn_event);
+  }
+  #endif
 #endif //CXXAMP_ENABLE_HSA
 #endif // __GPU__
 }

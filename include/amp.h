@@ -1667,6 +1667,9 @@ public:
       }
 
   operator std::vector<T>() const {
+#ifndef __GPU__
+      m_device.synchronize();
+#endif
       T *begin = reinterpret_cast<T*>(m_device.get()),
         *end = reinterpret_cast<T*>(m_device.get() + extent.size());
       return std::vector<T>(begin, end);
@@ -1678,6 +1681,7 @@ public:
     if(cpu_access_type == access_type_none) {
       //return reinterpret_cast<T*>(NULL);
     }      
+    m_device.synchronize();
 #endif
     return reinterpret_cast<T*>(m_device.get());
   }
@@ -1823,7 +1827,8 @@ public:
   typename projection_helper<T, N>::result_type
       operator[] (int i) const restrict(amp,cpu) {
 #ifndef __GPU__
-      synchronize();
+      // FIXME a LOT of synchronize() calls would happen here
+      //synchronize();
 #endif
           return projection_helper<T, N>::project(*this, i);
       }
@@ -2150,6 +2155,9 @@ public:
     return ptr[amp_helper<N, index<N>, Concurrency::extent<N>>::flatten(idx + index_base, extent_base)];
   }
   const T* data() const restrict(amp,cpu) {
+#ifndef __GPU__
+    synchronize();
+#endif
     static_assert(N == 1, "data() is only permissible on array views of rank 1");
     return reinterpret_cast<T*>(cache.get() + offset + index_base[0]);
   }
@@ -2269,8 +2277,9 @@ void copy(const array_view<const T, N>& src, const array_view<T, N>& dest) {
 
 template <typename T>
 void copy(const array_view<T, 1>& src, const array_view<T, 1>& dest) {
-    for (int i = 0; i < dest.get_extent()[0]; ++i)
-        dest[i] = src[i];
+    T* ptr_dest = dest.data();
+    T* ptr_src = src.data();
+    memcpy(ptr_dest, ptr_src, sizeof(T)*dest.get_extent()[0]);
 }
 template <typename T, int N>
 void copy(const array_view<T, N>& src, const array_view<T, N>& dest) {
@@ -2280,8 +2289,9 @@ void copy(const array_view<T, N>& src, const array_view<T, N>& dest) {
 
 template <typename T>
 void copy(const array<T, 1>& src, const array_view<T, 1>& dest) {
-    for (int i = 0; i < dest.get_extent()[0]; ++i)
-        dest[i] = src[i];
+    T* ptr_dest = dest.data();
+    T* ptr_src = src.data();
+    memcpy(ptr_dest, ptr_src, sizeof(T)*dest.get_extent()[0]);
 }
 template <typename T, int N>
 void copy(const array<T, N>& src, const array_view<T, N>& dest) {
