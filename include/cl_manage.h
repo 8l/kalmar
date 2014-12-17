@@ -118,7 +118,7 @@ struct AMPAllocator
         for (auto& it : rwq) {
             rw_info& rw = it.second;
             if (rw.used) {
-                err = clEnqueueWriteBuffer(getQueue(), mem_info[it.first].dm, CL_TRUE, 0,
+                err = clEnqueueWriteBuffer(queue, mem_info[it.first].dm, CL_TRUE, 0,
                                            rw.count, it.first, 0, NULL, NULL);
                 assert(err == CL_SUCCESS);
             }
@@ -129,7 +129,7 @@ struct AMPAllocator
         for (auto& it : rwq) {
             rw_info& rw = it.second;
             if (rw.used) {
-                err = clEnqueueReadBuffer(getQueue(), mem_info[it.first].dm, CL_TRUE, 0,
+                err = clEnqueueReadBuffer(queue, mem_info[it.first].dm, CL_TRUE, 0,
                                           rw.count, it.first, 0, NULL, NULL);
                 assert(err == CL_SUCCESS);
                 rw.used = false;
@@ -177,8 +177,13 @@ struct mm_info
         : data(aligned_alloc(0x1000, count)), free(true) { getAllocator().init(data, count); }
     mm_info(int count, void *src)
         : data(src), free(false) { getAllocator().init(data, count); }
+    void synchronize() {}
+    void refresh() {}
     void* get() { return data; }
-    void serialize(Serialize& s) { getAllocator().append(s, data); }
+    void disc() {}
+    void serialize(Serialize& s) {
+        getAllocator().append(s, data);
+    }
     ~mm_info() {
         getAllocator().free(data);
         if (free)
@@ -219,6 +224,9 @@ public:
         _data_host(const _data_host<U>& other) : mm(other.mm) {}
 
     T *get() const { return (T *)mm->get(); }
+    void synchronize() const { mm->synchronize(); }
+    void discard() const { mm->disc(); }
+    void refresh() const { mm->refresh(); }
 
     __attribute__((annotate("serialize")))
         void __cxxamp_serialize(Serialize& s) const {

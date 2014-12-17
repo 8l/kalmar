@@ -1667,6 +1667,9 @@ public:
       }
 
   operator std::vector<T>() const {
+#ifndef __GPU__
+      m_device.synchronize();
+#endif
       T *begin = reinterpret_cast<T*>(m_device.get()),
         *end = reinterpret_cast<T*>(m_device.get() + extent.size());
       return std::vector<T>(begin, end);
@@ -1678,6 +1681,7 @@ public:
     if(cpu_access_type == access_type_none) {
       //return reinterpret_cast<T*>(NULL);
     }      
+    m_device.synchronize();
 #endif
     return reinterpret_cast<T*>(m_device.get());
   }
@@ -1805,17 +1809,27 @@ public:
   }
 
   __global T& operator[](const index<N>& idx) const restrict(amp,cpu) {
+#ifndef __GPU__
+      synchronize();
+#endif
       __global T *ptr = reinterpret_cast<__global T*>(cache.get() + offset);
       return ptr[amp_helper<N, index<N>, Concurrency::extent<N>>::flatten(idx + index_base, extent_base)];
   }
   template <int D0, int D1=0, int D2=0>
   __global T& operator[](const tiled_index<D0, D1, D2>& idx) const restrict(amp,cpu) {
+#ifndef __GPU__
+      synchronize();
+#endif
       __global T *ptr = reinterpret_cast<__global T*>(cache.get() + offset);
       return ptr[amp_helper<N, index<N>, Concurrency::extent<N>>::flatten(idx.global + index_base, extent_base)];
   }
 
   typename projection_helper<T, N>::result_type
       operator[] (int i) const restrict(amp,cpu) {
+#ifndef __GPU__
+      // FIXME a LOT of synchronize() calls would happen here
+      //synchronize();
+#endif
           return projection_helper<T, N>::project(*this, i);
       }
   __global T& operator()(const index<N>& idx) const restrict(amp,cpu) {
@@ -1896,7 +1910,11 @@ public:
   void synchronize() const;
   completion_future synchronize_async() const;
   void refresh() const;
-  void discard_data() const {}
+  void discard_data() const {
+#ifndef __GPU__
+      cache.discard();
+#endif
+  }
   // only get data do not synchronize
   __global const T& get_data(int i0) const restrict(amp,cpu) {
     static_assert(N == 1, "Rank must be 1");
@@ -1905,6 +1923,9 @@ public:
     return ptr[amp_helper<N, index<N>, Concurrency::extent<N>>::flatten(idx + index_base, extent_base)];
   }
   T* data() const restrict(amp,cpu) {
+#ifndef __GPU__
+      synchronize();
+#endif
     static_assert(N == 1, "data() is only permissible on array views of rank 1");
     return reinterpret_cast<T*>(cache.get() + offset + index_base[0]);
   }
@@ -2027,12 +2048,18 @@ public:
   accelerator_view get_source_accelerator_view() const;
 
   __global const T& operator[](const index<N>& idx) const restrict(amp,cpu) {
+#ifndef __GPU__
+      synchronize();
+#endif
     __global T *ptr = reinterpret_cast<__global T*>(cache.get() + offset);
     return ptr[amp_helper<N, index<N>, Concurrency::extent<N>>::flatten(idx + index_base, extent_base)];
   }
 
   typename projection_helper<const T, N>::const_result_type
       operator[] (int i) const restrict(amp,cpu) {
+#ifndef __GPU__
+      synchronize();
+#endif
     return projection_helper<const T, N>::project(*this, i);
   }
 
@@ -2128,6 +2155,9 @@ public:
     return ptr[amp_helper<N, index<N>, Concurrency::extent<N>>::flatten(idx + index_base, extent_base)];
   }
   const T* data() const restrict(amp,cpu) {
+#ifndef __GPU__
+    synchronize();
+#endif
     static_assert(N == 1, "data() is only permissible on array views of rank 1");
     return reinterpret_cast<T*>(cache.get() + offset + index_base[0]);
   }
