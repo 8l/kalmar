@@ -2581,8 +2581,14 @@ static inline int atomic_fetch_add(int *x, int y) restrict(amp,cpu) {
   return atomic_add_int(x, y);
 }
 #else
-unsigned atomic_fetch_add(unsigned *x, unsigned y) restrict(amp,cpu);
-int atomic_fetch_add(int *x, int y) restrict(amp, cpu);
+unsigned atomic_add_unsigned(unsigned *p, unsigned val);
+int atomic_add_int(int *p, int val);
+static inline unsigned atomic_fetch_add(unsigned *x, unsigned y) restrict(amp,cpu) {
+  return atomic_add_unsigned(x, y);
+}
+static inline int atomic_fetch_add(int *x, int y) restrict(amp,cpu) {
+  return atomic_add_int(x, y);
+}
 #endif
 
 #ifdef __GPU__
@@ -2606,11 +2612,24 @@ static inline int atomic_fetch_inc(int *x) restrict(amp,cpu) {
 }
 #else
 
-int atomic_fetch_inc(int * _Dest) restrict(amp, cpu);
-unsigned atomic_fetch_inc(unsigned * _Dest) restrict(amp, cpu);
+unsigned atomic_max_unsigned(unsigned *p, unsigned val);
+int atomic_max_int(int *p, int val);
 
-int atomic_fetch_max(int * dest, int val) restrict(amp, cpu);
-unsigned int atomic_fetch_max(unsigned int * dest, unsigned int val) restrict(amp, cpu);
+static inline unsigned atomic_fetch_max(unsigned *x, unsigned y) restrict(amp) {
+  return atomic_max_unsigned(x, y);
+}
+static inline int atomic_fetch_max(int *x, int y) restrict(amp) {
+  return atomic_max_int(x, y);
+}
+
+unsigned atomic_inc_unsigned(unsigned *p); 
+int atomic_inc_int(int *p);
+static inline unsigned atomic_fetch_inc(unsigned *x) restrict(amp,cpu) {
+  return atomic_inc_unsigned(x);
+}
+static inline int atomic_fetch_inc(int *x) restrict(amp,cpu) {
+  return atomic_inc_int(x);
+}
 
 #endif
 
