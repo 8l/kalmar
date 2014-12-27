@@ -1320,8 +1320,7 @@ public:
 
   __attribute__((annotate("serialize")))
   void __cxxamp_serialize(Serialize& s) const {
-    array<T, N>* p_arr = (array<T, N>*)m_arr;
-/*
+/*    array<T, N>* p_arr = (array<T, N>*)m_arr;
     if (p_arr && p_arr->pav && p_arr->pav->get_accelerator() == accelerator(accelerator::cpu_accelerator)) {
       throw runtime_exception(__errorMsg_UnsupportedAccelerator, E_FAIL);
     }    
@@ -1733,8 +1732,8 @@ public:
   ~array_view() restrict(amp,cpu) {}
 
   array_view(array<T, N>& src) restrict(amp,cpu)
-      : extent(src.extent), cache(src.internal()), offset(0),
-      index_base(), extent_base(src.extent) {}
+      : extent(src.extent), extent_base(src.extent),
+      index_base(), cache(src.internal()), offset(0) {}
 
   template <typename Container, class = typename std::enable_if<!std::is_array<Container>::value>::type>
       array_view(const Concurrency::extent<N>& extent, Container& src)
@@ -1778,8 +1777,8 @@ public:
   { static_assert(N == 3, "Rank must be 3"); }
 
    array_view(const array_view& other) restrict(amp,cpu) : extent(other.extent),
-    cache(other.cache), offset(other.offset), index_base(other.index_base),
-    extent_base(other.extent_base) {}
+    extent_base(other.extent_base), index_base(other.index_base),
+    cache(other.cache), offset(other.offset) {}
   array_view& operator=(const array_view& other) restrict(amp,cpu) {
       if (this != &other) {
           extent = other.extent;
@@ -1941,19 +1940,19 @@ private:
   // used by view_as and reinterpret_as
   array_view(const Concurrency::extent<N>& ext, const cl_buffer_t& cache,
              int offset) restrict(amp,cpu)
-      : extent(ext), cache(cache), offset(offset), extent_base(ext) {}
+      : extent(ext), extent_base(ext), cache(cache), offset(offset) {}
   // used by section and projection
   array_view(const Concurrency::extent<N>& ext_now,
              const Concurrency::extent<N>& ext_b,
              const Concurrency::index<N>& idx_b,
              const cl_buffer_t& cache, int off) restrict(amp,cpu)
-      : extent(ext_now), index_base(idx_b), extent_base(ext_b),
+      : extent(ext_now), extent_base(ext_b), index_base(idx_b),
       cache(cache), offset(off) {}
 
-  cl_buffer_t cache;
   Concurrency::extent<N> extent;
   Concurrency::extent<N> extent_base;
   Concurrency::index<N> index_base;
+  cl_buffer_t cache;
   int offset;
 };
 
@@ -2007,12 +2006,12 @@ public:
   { static_assert(N == 3, "Rank must be 3"); }
 
   array_view(const array_view<T, N>& other) restrict(amp,cpu) : extent(other.extent),
-      cache(other.cache), offset(other.offset), index_base(other.index_base),
-      extent_base(other.extent_base) {}
+      extent_base(other.extent_base), index_base(other.index_base),
+       cache(other.cache), offset(other.offset) {}
 
   array_view(const array_view& other) restrict(amp,cpu) : extent(other.extent),
-    cache(other.cache), offset(other.offset), index_base(other.index_base),
-    extent_base(other.extent_base) {}
+    extent_base(other.extent_base), index_base(other.index_base),
+     cache(other.cache), offset(other.offset) {}
 
   array_view& operator=(const array_view<T,N>& other) restrict(amp,cpu) {
     extent = other.extent;
@@ -2172,20 +2171,20 @@ private:
   // used by view_as and reinterpret_as
   array_view(const Concurrency::extent<N>& ext, const cl_buffer_t& cache,
              int offset) restrict(amp,cpu)
-      : extent(ext), cache(cache), offset(offset), extent_base(ext) {}
+      : extent(ext), extent_base(ext), cache(cache), offset(offset) {}
 
   // used by section and projection
   array_view(const Concurrency::extent<N>& ext_now,
              const Concurrency::extent<N>& ext_b,
              const Concurrency::index<N>& idx_b,
              const cl_buffer_t& cache, int off) restrict(amp,cpu)
-      : extent(ext_now), index_base(idx_b), extent_base(ext_b),
+      : extent(ext_now), extent_base(ext_b), index_base(idx_b),
       cache(cache), offset(off) {}
 
-  cl_buffer_t cache;
   Concurrency::extent<N> extent;
   Concurrency::extent<N> extent_base;
   Concurrency::index<N> index_base;
+  cl_buffer_t cache;
   int offset;
 };
 
