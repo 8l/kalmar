@@ -609,11 +609,11 @@ completion_future array_view<T, N>::synchronize_async() const {
 template <typename T, int N>
 array_view<T, N>::array_view(const Concurrency::extent<N>& ext,
                              value_type* src) restrict(amp,cpu)
-    : extent(ext), cache(ext.size(), src), offset(0), extent_base(ext) {}
+    : extent(ext), extent_base(ext), cache(ext.size(), src), offset(0) {}
 
 template <typename T, int N>
 array_view<T, N>::array_view(const Concurrency::extent<N>& ext) restrict(amp,cpu)
-    : extent(ext), cache(ext.size()), offset(0), extent_base(ext) {}
+    : extent(ext), extent_base(ext), cache(ext.size()), offset(0) {}
 
 template <typename T, int N>
 void array_view<T, N>::refresh() const {
@@ -628,8 +628,7 @@ void array_view<T, N>::refresh() const {
 template <typename T, int N>
 array_view<T,N>::array_view(const Concurrency::extent<N>& ext,
                             value_type* src) restrict(amp,cpu)
-    : extent(ext), cache((__global T *)(src)),
-    offset(0), extent_base(ext) {}
+    : extent(ext), extent_base(ext), cache((__global T *)(src)), offset(0) {}
 
 #endif
 
@@ -652,8 +651,7 @@ completion_future array_view<const T, N>::synchronize_async() const {
 template <typename T, int N>
 array_view<const T, N>::array_view(const Concurrency::extent<N>& ext,
                              value_type* src) restrict(amp,cpu)
-    : extent(ext), cache(ext.size(), const_cast<nc_T*>(src)),
-    offset(0), extent_base(ext) {}
+    : extent(ext), extent_base(ext), cache(ext.size(), const_cast<nc_T*>(src)), offset(0) {}
 
 template <typename T, int N>
 void array_view<const T, N>::refresh() const {
@@ -668,8 +666,7 @@ void array_view<const T, N>::refresh() const {
 template <typename T, int N>
 array_view<const T,N>::array_view(const Concurrency::extent<N>& ext,
                             value_type* src) restrict(amp,cpu)
-    : extent(ext), cache((__global nc_T *)(src)),
-    offset(0), extent_base(ext) {}
+    : extent(ext), extent_base(ext), cache((__global nc_T *)(src)), offset(0) {}
 
 #endif
 #undef __global
