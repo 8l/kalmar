@@ -34,6 +34,7 @@ class Serialize {
     err = clSetKernelArg(k_, current_idx_++, sz, s);
     assert(err == CL_SUCCESS);
   }
+  cl_kernel getKernel() { return k_; }
 #endif
  private:
 #if defined(CXXAMP_ENABLE_HSA)

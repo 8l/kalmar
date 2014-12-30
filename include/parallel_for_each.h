@@ -25,6 +25,7 @@ extern std::future<void> HSALaunchKernelAsync(void *ker, size_t, size_t *global,
 extern void MatchKernelNames( std::string & );
 extern void CompileKernels(cl_program& program, cl_context& context, cl_device_id& device);
 extern cl_kernel GetKernelObject(cl_program& prog, std::string& name);
+extern void AddKernelEventObject(cl_kernel, cl_event);
 }
 static inline std::string mcw_cxxamp_fixnames(char *f) restrict(cpu) {
     std::string s(f);
@@ -68,6 +69,8 @@ static inline std::future<void> mcw_cxxamp_launch_kernel_async(size_t *ext,
 #endif
 #endif
 }
+
+#define CXXAMP_SYNC (0)
 
 template<typename Kernel, int dim_ext>
 static inline void mcw_cxxamp_launch_kernel(size_t *ext,
@@ -129,15 +132,12 @@ static inline void mcw_cxxamp_launch_kernel(size_t *ext,
   cl_command_queue queue = aloc.getQueue();
   err = clEnqueueNDRangeKernel( queue, kernel, dim_ext, NULL, ext, local_size, 0, NULL, &kn_event);
   assert(err == CL_SUCCESS);
+  CLAMP::AddKernelEventObject(kernel, kn_event);
 #if defined(CXXAMP_NV)
   aloc.read();
 #endif
-  // kernel objects will be released when AMPAllocator is destructed.
-  //err = clReleaseKernel(kernel);
-  //assert(err == CL_SUCCESS);
-  #if 0
-  clFinish( queue );
-  #else
+
+  #if CXXAMP_SYNC 
   // Provided the queued kernels are independent, we could flush them
   // We should consider to use multiple queues
   err = clFlush( queue );
@@ -147,9 +147,9 @@ static inline void mcw_cxxamp_launch_kernel(size_t *ext,
       err = clGetEventInfo(kn_event, CL_EVENT_COMMAND_EXECUTION_STATUS, sizeof(cl_int),&status,NULL);
       assert(err == CL_SUCCESS);
     }
-    err = clReleaseEvent(kn_event);
   }
   #endif
+
 #endif //CXXAMP_ENABLE_HSA
 #endif // __GPU__
 }

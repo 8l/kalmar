@@ -36,6 +36,9 @@ struct DimMaxSize {
 extern std::map<cl_device_id, struct DimMaxSize> Clid2DimSizeMap;
 namespace CLAMP {
 extern void ReleaseKernelObject();
+extern void AddKernelEventObject(cl_kernel, cl_event);
+extern std::vector<cl_event>& GetKernelEventObject(cl_kernel);
+extern void RemoveKernelEventObject(cl_kernel);
 }
 
 struct AMPAllocator
@@ -171,21 +174,47 @@ AMPAllocator& getAllocator();
 
 struct mm_info
 {
+    std::vector<cl_kernel> serializedKernel;
     void *data;
     bool free;
+    //static int waitOnKernelsCount;
     mm_info(int count)
         : data(aligned_alloc(0x1000, count)), free(true) { getAllocator().init(data, count); }
     mm_info(int count, void *src)
         : data(src), free(false) { getAllocator().init(data, count); }
-    void synchronize() {}
+    void synchronize() {
+        //printf("mm_info::synchronize() : %d\n", ++waitOnKernelsCount);
+        waitOnKernels();
+    }
     void refresh() {}
     void* get() { return data; }
     void disc() {}
-    void serialize(Serialize& s) { getAllocator().append(s, data); }
+    void serialize(Serialize& s) {
+        serializedKernel.push_back(s.getKernel());
+        getAllocator().append(s, data);
+    }
     ~mm_info() {
+        //printf("mm_info::~mm_info() : %d\n", ++waitOnKernelsCount);
+        waitOnKernels();
         getAllocator().free(data);
         if (free)
             ::operator delete(data);
+    }
+    void waitOnKernels() {
+        // for each kernel, check if it has been finished
+        std::for_each(serializedKernel.begin(), serializedKernel.end(), [](cl_kernel& k) {
+            // get cl_event associated with the kernel
+            std::vector<cl_event>& event_vector = CLAMP::GetKernelEventObject(k);
+            std::for_each(event_vector.begin(), event_vector.end(), [](cl_event& event) {
+                // wait for the event to be completed
+                clWaitForEvents(1, &event);
+
+                clReleaseEvent(event);
+            });
+
+            // wait done, can remove the event object
+            CLAMP::RemoveKernelEventObject(k);
+        });
     }
 };
 
