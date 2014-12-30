@@ -60,6 +60,17 @@ inline accelerator::accelerator(const std::wstring& path) :
 						new accelerator_view(_cpu_accelerator.get()) : new accelerator_view(this)) )
     {
 #if !defined(CXXAMP_ENABLE_HSA)
+    if (_gpu_accelerator != nullptr && device_path == std::wstring(gpu_accelerator)) {
+      supports_cpu_shared_memory = _gpu_accelerator->supports_cpu_shared_memory;
+      dedicated_memory = _gpu_accelerator->dedicated_memory;
+      supports_limited_double_precision = _gpu_accelerator->supports_limited_double_precision;
+      return;
+    } else if (_cpu_accelerator != nullptr && device_path == std::wstring(cpu_accelerator)) {
+      supports_cpu_shared_memory = _cpu_accelerator->supports_cpu_shared_memory;
+      dedicated_memory = _cpu_accelerator->dedicated_memory;
+      supports_limited_double_precision = _cpu_accelerator->supports_limited_double_precision;
+      return;
+    }
     cl_int err;
     cl_uint platformCount;
     cl_device_id device;
