@@ -76,7 +76,25 @@ struct AMPAllocator
           assert(err == CL_SUCCESS);
         }
         queue_id = 0;
-
+        // Propel underlying OpenCL driver to enque kernels faster (pthread-based)
+        // FIMXE: workable on AMD platforms only
+        for (int qid = 0; qid < QUEUE_SIZE; qid++) {
+          #define CL_QUEUE_THREAD_HANDLE_AMD 0x403E
+          void* handle=NULL;
+          cl_int status = clGetCommandQueueInfo (queue[qid], CL_QUEUE_THREAD_HANDLE_AMD, sizeof(handle), &handle, NULL );
+          // Ensure it is valid
+          if (status == CL_SUCCESS && handle) {
+            pthread_t thId = (pthread_t)handle;
+            pthread_attr_t thAttr;
+            int policy = 0;
+            int max_prio_for_policy = 1;
+            pthread_attr_init(&thAttr);
+            pthread_attr_getschedpolicy(&thAttr, &policy);
+            max_prio_for_policy = sched_get_priority_max(policy);
+            pthread_setschedprio(thId, max_prio_for_policy);
+            pthread_attr_destroy(&thAttr);
+          }
+        }
       // C++ AMP specifications
       // The maximum number of tiles per dimension will be no less than 65535.
       // The maximum number of threads in a tile will be no less than 1024.
