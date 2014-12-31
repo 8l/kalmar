@@ -75,23 +75,59 @@ struct AMPAllocator
         queue_id = 0;
         // Propel underlying OpenCL driver to enque kernels faster (pthread-based)
         // FIMXE: workable on AMD platforms only
+        pthread_t self = pthread_self();
+        pthread_attr_t attr;
+        pthread_attr_init(&attr);
+        int result = -1;
+        // Get max priority
+        int policy = 0;
+        result = pthread_attr_getschedpolicy(&attr, &policy);
+        if (result != 0)
+          perror("getsched error!\n");
+        int max_prio = sched_get_priority_max(policy);
+
+        struct sched_param param;
+        // Get self priority
+        result = pthread_getschedparam(self, &policy, &param);
+        if (result != 0)
+          perror("getsched self error!\n");
+        int self_prio = param.sched_priority;
+        #if 0
+        printf("self=%d, self_prio = %d,  max = %d\n", (int)self, self_prio, max_prio);
+        #endif
         for (int qid = 0; qid < QUEUE_SIZE; qid++) {
           #define CL_QUEUE_THREAD_HANDLE_AMD 0x403E
+          #define PRIORITY_OFFSET 2
           void* handle=NULL;
           cl_int status = clGetCommandQueueInfo (queue[qid], CL_QUEUE_THREAD_HANDLE_AMD, sizeof(handle), &handle, NULL );
           // Ensure it is valid
           if (status == CL_SUCCESS && handle) {
             pthread_t thId = (pthread_t)handle;
-            pthread_attr_t thAttr;
-            int policy = 0;
-            int max_prio_for_policy = 1;
-            pthread_attr_init(&thAttr);
-            pthread_attr_getschedpolicy(&thAttr, &policy);
-            max_prio_for_policy = sched_get_priority_max(policy);
-            pthread_setschedprio(thId, max_prio_for_policy);
-            pthread_attr_destroy(&thAttr);
-          }
+            result = pthread_getschedparam(thId, &policy, &param);
+            if (result != 0)
+              perror("getsched q error!\n");
+            int que_prio = param.sched_priority;
+            #if 0
+            printf("que=%d, que_prio = %d\n", (int)thId, que_prio);
+            #endif
+            // Strategy to renew the que thread's priority, the smaller the highest
+            if (max_prio == que_prio) {
+              // perfect. Do nothing
+              continue;
+            } else if (max_prio < que_prio && que_prio <= self_prio) {
+              // self    que    max
+              que_prio = (que_prio-PRIORITY_OFFSET)>0?(que_prio-PRIORITY_OFFSET):que_prio;
+            } else if (que_prio > self_prio) {
+              // que   self    max
+              que_prio = (self_prio-PRIORITY_OFFSET)>0?(self_prio-PRIORITY_OFFSET):self_prio;
+            } 
+            int result = pthread_setschedprio(thId, que_prio);
+            if (result != 0)
+              perror("Renew p error!\n");
+          } 
         }
+        pthread_attr_destroy(&attr);
+
       // C++ AMP specifications
       // The maximum number of tiles per dimension will be no less than 65535.
       // The maximum number of threads in a tile will be no less than 1024.
