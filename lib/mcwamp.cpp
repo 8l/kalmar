@@ -365,7 +365,11 @@ namespace Concurrency { namespace CLAMP {
 
             __mcw_cxxamp_compiled = true;
             free(kernel_source);
+            // FIXME: MatchKernelNames is temporarily commented out for better purpose
+            // therefore no need to call the following
+            #if 0
             getKernelNames(program);
+            #endif
 #endif
         }
     }
