@@ -367,7 +367,7 @@ namespace Concurrency { namespace CLAMP {
             free(kernel_source);
             // FIXME: MatchKernelNames is temporarily commented out for better purpose
             // therefore no need to call the following
-            #if 0
+            #if 1
             getKernelNames(program);
             #endif
 #endif
