@@ -13,6 +13,7 @@
 #include <string.h>
 #include <CL/opencl.h>
 
+#define CXXAMP_SYNC (1)
 
 #if defined(CXXAMP_NV)
 struct rw_info
@@ -244,7 +245,9 @@ struct mm_info
     void* get() { return data; }
     void disc() {}
     void serialize(Serialize& s) {
+        #if !CXXAMP_SYNC
         serializedKernel.push_back(s.getKernel());
+        #endif
         getAllocator().append(s, data);
     }
     ~mm_info() {
@@ -255,6 +258,7 @@ struct mm_info
             ::operator delete(data);
     }
     void waitOnKernels() {
+        #if !CXXAMP_SYNC
         // for each kernel, check if it has been finished
         std::for_each(serializedKernel.begin(), serializedKernel.end(), [](cl_kernel& k) {
             // get cl_event associated with the kernel
@@ -269,6 +273,7 @@ struct mm_info
             // wait done, can remove the event object
             CLAMP::RemoveKernelEventObject(k);
         });
+       #endif
     }
 };
 
