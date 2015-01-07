@@ -70,8 +70,6 @@ static inline std::future<void> mcw_cxxamp_launch_kernel_async(size_t *ext,
 #endif
 }
 
-#define CXXAMP_SYNC (0)
-
 template<typename Kernel, int dim_ext>
 static inline void mcw_cxxamp_launch_kernel(size_t *ext,
   size_t *local_size, const Kernel& f) restrict(cpu,amp) {
@@ -132,7 +130,9 @@ static inline void mcw_cxxamp_launch_kernel(size_t *ext,
   cl_command_queue queue = aloc.getQueue();
   err = clEnqueueNDRangeKernel( queue, kernel, dim_ext, NULL, ext, local_size, 0, NULL, &kn_event);
   assert(err == CL_SUCCESS);
+  #if !CXXAMP_SYNC 
   CLAMP::AddKernelEventObject(kernel, kn_event);
+  #endif
 #if defined(CXXAMP_NV)
   aloc.read();
 #endif
