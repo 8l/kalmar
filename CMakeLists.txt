@@ -169,13 +169,15 @@ if(CXXAMP_ENABLE_BOLT)
   SET( CLAMP_LIBCXX_LIB_DIR "${PROJECT_BINARY_DIR}/libc++/libcxx/lib" )
   SET( CLAMP_LIBCXXRT_LIB_DIR "${PROJECT_BINARY_DIR}/libc++/libcxxrt/lib" )
 
-  SET( CLAMP_LIBRARIES mcwamp c++ cxxrt dl OpenCL )
+  SET( CLAMP_LIBRARIES allocator mcwamp c++ cxxrt dl OpenCL )
   SET( CLAMP_INC_DIRS ${PROJECT_SOURCE_DIR}/include
-     ${CLAMP_LIBCXX_INC_DIR} )
+     ${CLAMP_LIBCXX_INC_DIR}
+     ${OPENCL_HEADER}/../ )
 
   SET( CLAMP_LIB_DIRS ${PROJECT_BINARY_DIR}/build/${CMAKE_BUILD_TYPE}/lib
      ${CLAMP_LIBCXX_LIB_DIR}
-     ${CLAMP_LIBCXXRT_LIB_DIR} )
+     ${CLAMP_LIBCXXRT_LIB_DIR}
+     ${OPENCL_LIBRARY}/../ )
 
   # This is the only source code folder we can build as a generator
   add_subdirectory( Bolt/superbuild )
