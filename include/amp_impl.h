@@ -35,7 +35,7 @@ inline accelerator::accelerator(const std::wstring& path) :
 					path : 
 					(_default_accelerator != nullptr) ?
 						accelerator::_default_accelerator->get_device_path() :
-                        std::wstring(CLAMP::is_cpu() ? cpu_accelerator : gpu_accelerator) ),
+                        std::wstring(gpu_accelerator) ),
   version(0), 
   description(L""),
   is_debug(false),
