@@ -1,4 +1,4 @@
-//===- CpuRename.cpp - Remove non-GPU codes from LLVM IR -------------===//
+//===- CpuRename.cpp - Rename functions used in cpu kernel -------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -7,11 +7,9 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file implements a pass which removes non-GPU codes from LLVM IR.
+// This file implements a pss which renames functions used in cpu kernel
 //
 //===----------------------------------------------------------------------===//
-
-//#define DEBUG_TYPE "PromoteGlobals"
 
 #include "llvm/ADT/Twine.h"
 #include "llvm/IR/Function.h"

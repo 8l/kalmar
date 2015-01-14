@@ -19,52 +19,16 @@ extern "C" void PushArgImpl(void *ker, int idx, size_t sz, const void *v) {}
 
 namespace Concurrency {
 
-struct rw_info
-{
-  int count;
-  bool used;
-};
 class CPUAMPAllocator : public AMPAllocator
 { 
 public:
   CPUAMPAllocator() {}
-  void init(void *data, int count) {
-  }
-  void append(void *kernel, int idx, void *data) {
-    rwq[data].used = true;
-  }
-  void write() {
-    //std::cerr << "HSAAMPAllocator::write()" << std::endl;
-    for (auto& it : rwq) {
-      rw_info& rw = it.second;
-      if (rw.used) {
-      }
-    }
-  }
-  void read() {
-    for (auto& it : rwq) {
-      rw_info& rw = it.second;
-      if (rw.used) {
-        if (it.first != mem_info[it.first]) {
-        }
-        rw.used = false;
-      }
-    }
-  }
-  void free(void *data) {
-    auto iter = mem_info.find(data);
-    if (iter != mem_info.end()) {
-      free(iter->second);
-      mem_info.erase(iter);
-    }
-  }
-  ~CPUAMPAllocator() {
-    mem_info.clear();
-    rwq.clear();
-  }
-
-  std::map<void *, void*> mem_info;
-  std::map<void *, rw_info> rwq;
+  void init(void *data, int count) {}
+  void append(void *kernel, int idx, void *data) {}
+  void write() {}
+  void read() {}
+  void free(void *data) {}
+  ~CPUAMPAllocator() {}
 };
 
 static CPUAMPAllocator amp;
