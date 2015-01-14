@@ -105,7 +105,7 @@ public:
             mm->serialize(s);
         }
     __attribute__((annotate("user_deserialize")))
-        explicit _data_host(__global T* t);
+        explicit _data_host(__global T* t) {};
 };
 
 } // namespace Concurrency

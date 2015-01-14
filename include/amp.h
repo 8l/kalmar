@@ -693,13 +693,11 @@ private:
 
     __attribute__((annotate("__cxxamp_opencl_index")))
         void __cxxamp_opencl_index() restrict(amp,cpu)
-#ifdef __GPU__
         {
+#ifdef __GPU__
             index_helper<N, index<N>>::set(*this);
-        }
-#else
-    ;
 #endif
+        };
 };
 
 template <typename Ker, typename Ti>
@@ -761,16 +759,16 @@ class tile_barrier {
     amp_barrier(CLK_LOCAL_MEM_FENCE);
   }
 #else
-  void wait() const restrict(cpu) {
+  void wait() const restrict(amp) {
       pbar->wait();
   }
-  void wait_with_all_memory_fence() const restrict(cpu) {
+  void wait_with_all_memory_fence() const restrict(amp) {
       pbar->wait();
   }
-  void wait_with_global_memory_fence() const restrict(cpu) {
+  void wait_with_global_memory_fence() const restrict(amp) {
       pbar->wait();
   }
-  void wait_with_tile_static_memory_fence() const restrict(cpu) {
+  void wait_with_tile_static_memory_fence() const restrict(amp) {
       pbar->wait();
   }
 #endif
@@ -982,8 +980,8 @@ class tiled_index {
 
   //CLAMP
   __attribute__((annotate("__cxxamp_opencl_index")))
-  __attribute__((always_inline)) tiled_index() restrict(amp)
 #ifdef __GPU__
+  __attribute__((always_inline)) tiled_index() restrict(amp)
   : global(index<3>(amp_get_global_id(2), amp_get_global_id(1), amp_get_global_id(0))),
     local(index<3>(amp_get_local_id(2), amp_get_local_id(1), amp_get_local_id(0))),
     tile(index<3>(amp_get_group_id(2), amp_get_group_id(1), amp_get_group_id(0))),
@@ -991,6 +989,8 @@ class tiled_index {
                          amp_get_global_id(1)-amp_get_local_id(1),
                          amp_get_global_id(0)-amp_get_local_id(0))),
     tile_extent(D0, D1, D2)
+#else
+  __attribute__((always_inline)) tiled_index() restrict(amp, cpu)
 #endif // __GPU__
   {}
   template<int D0_, int D1_, int D2_, typename K>
@@ -1036,13 +1036,15 @@ class tiled_index<D0, 0, 0> {
 
   //CLAMP
   __attribute__((annotate("__cxxamp_opencl_index")))
-  __attribute__((always_inline)) tiled_index() restrict(amp)
 #ifdef __GPU__
+  __attribute__((always_inline)) tiled_index() restrict(amp)
   : global(index<1>(amp_get_global_id(0))),
     local(index<1>(amp_get_local_id(0))),
     tile(index<1>(amp_get_group_id(0))),
     tile_origin(index<1>(amp_get_global_id(0)-amp_get_local_id(0))),
     tile_extent(D0)
+#else
+  __attribute__((always_inline)) tiled_index() restrict(amp,cpu)
 #endif // __GPU__
   {}
   template<int D, typename K>
@@ -1090,14 +1092,16 @@ class tiled_index<D0, D1, 0> {
 
   //CLAMP
   __attribute__((annotate("__cxxamp_opencl_index")))
-  __attribute__((always_inline)) tiled_index() restrict(amp)
 #ifdef __GPU__
+  __attribute__((always_inline)) tiled_index() restrict(amp)
   : global(index<2>(amp_get_global_id(1), amp_get_global_id(0))),
     local(index<2>(amp_get_local_id(1), amp_get_local_id(0))),
     tile(index<2>(amp_get_group_id(1), amp_get_group_id(0))),
     tile_origin(index<2>(amp_get_global_id(1)-amp_get_local_id(1),
                          amp_get_global_id(0)-amp_get_local_id(0))),
     tile_extent(D0, D1)
+#else
+  __attribute__((always_inline)) tiled_index() restrict(amp,cpu)
 #endif // __GPU__
   {}
   template<int D0_, int D1_, typename K>
@@ -1370,7 +1374,7 @@ public:
   __attribute__((annotate("user_deserialize")))
   array_helper() restrict(cpu, amp) {}
 
-  void setArray(array<T, N>* arr) restrict(cpu) { m_arr = arr; }
+  void setArray(array<T, N>* arr) restrict(amp,cpu) { m_arr = arr; }
 
   __attribute__((annotate("serialize")))
   void __cxxamp_serialize(Serialize& s) const {

@@ -39,7 +39,7 @@ struct cpu_helper<K, Kernel, K>
 };
 
 template <typename Kernel, int N>
-void partitioed_task(const Kernel& ker, const extent<N>& ext, int part) {
+void partitioned_task(const Kernel& ker, const extent<N>& ext, int part) {
     index<N> idx;
     int start = ext[0] * part / NTHREAD;
     int end = ext[0] * (part + 1) / NTHREAD;
@@ -68,7 +68,7 @@ struct bar_t {
 };
 
 template <typename Kernel, int D0>
-void partitioed_task_tile(const Kernel& f, const tiled_extent<D0>& ext, int part, bar_t& gbar) {
+void partitioned_task_tile(const Kernel& f, const tiled_extent<D0>& ext, int part, bar_t& gbar) {
     int start = D0 * part / NTHREAD;
     int end = D0 * (part + 1) / NTHREAD;
     int stride = end - start;
@@ -93,7 +93,7 @@ void partitioed_task_tile(const Kernel& f, const tiled_extent<D0>& ext, int part
     }
 }
 template <typename Kernel, int D0, int D1>
-void partitioed_task_tile(const Kernel& f, const tiled_extent<D0, D1>& ext, int part, bar_t& gbar) {
+void partitioned_task_tile(const Kernel& f, const tiled_extent<D0, D1>& ext, int part, bar_t& gbar) {
     int start = D0 * part / NTHREAD;
     int end = D0 * (part + 1) / NTHREAD;
     int stride = end - start;
@@ -122,7 +122,7 @@ void partitioed_task_tile(const Kernel& f, const tiled_extent<D0, D1>& ext, int 
 }
 
 template <typename Kernel, int D0, int D1, int D2>
-void partitioed_task_tile(const Kernel& f, const tiled_extent<D0, D1, D2>& ext, int part, bar_t& gbar) {
+void partitioned_task_tile(const Kernel& f, const tiled_extent<D0, D1, D2>& ext, int part, bar_t& gbar) {
     int start = D0 * part / NTHREAD;
     int end = D0 * (part + 1) / NTHREAD;
     int stride = end - start;
@@ -156,7 +156,7 @@ void partitioed_task_tile(const Kernel& f, const tiled_extent<D0, D1, D2>& ext, 
 }
 
 
-static inline std::string mcw_cxxamp_fixnames(char *f) restrict(cpu) {
+static inline std::string mcw_cxxamp_fixnames(char *f) restrict(cpu,amp) {
     std::string s(f);
     std::string out;
 
@@ -232,7 +232,9 @@ template <typename Kernel, typename _Tp>
 struct pfe_helper<0, Kernel, _Tp>
 {
     static inline void call(Kernel& k, _Tp& idx) restrict(amp,cpu) {
+#ifdef __GPU__
         k.k(idx);
+#endif
     }
 };
 
@@ -256,6 +258,11 @@ template <int N, typename Kernel>
 __attribute__((noinline,used)) void parallel_for_each(
     extent<N> compute_domain, const Kernel& f) restrict(cpu, amp) {
 #ifndef __GPU__
+    int* foo1 = reinterpret_cast<int*>(&Kernel::__cxxamp_trampoline);
+    auto bar = &pfe_wrapper<N, Kernel>::operator();
+    auto qq = &index<N>::__cxxamp_opencl_index;
+    int* foo = reinterpret_cast<int*>(&pfe_wrapper<N, Kernel>::__cxxamp_trampoline);
+
     size_t compute_domain_size = 1;
     for(int i = 0 ; i < N ; i++)
     {
@@ -272,24 +279,28 @@ __attribute__((noinline,used)) void parallel_for_each(
         static_cast<size_t>(compute_domain[N - 2]),
         static_cast<size_t>(compute_domain[N - 3])};
     if (CLAMP::is_cpu()) {
+#ifdef __CPU__
         {
           Concurrency::Serialize s(nullptr, 0);
           f.__cxxamp_serialize(s);
         }
         std::vector<std::thread> th(NTHREAD);
         for (int i = 0; i < NTHREAD; ++i)
-            th[i] = std::thread(partitioed_task<Kernel, N>, std::cref(f), std::cref(compute_domain), i);
+            th[i] = std::thread(partitioned_task<Kernel, N>, std::cref(f), std::cref(compute_domain), i);
         for (auto& t : th)
-            t.join();
+            if (t.joinable())
+                t.join();
         {
           Concurrency::Serialize s(nullptr);
           f.__cxxamp_serialize(s);
         }
+#endif
     } else {
         const pfe_wrapper<N, Kernel> _pf(compute_domain, f);
         mcw_cxxamp_launch_kernel<pfe_wrapper<N, Kernel>, 3>(ext, NULL, _pf);
     }
 #else
+    int* foo1 = reinterpret_cast<int*>(&Kernel::__cxxamp_trampoline);
     auto bar = &pfe_wrapper<N, Kernel>::operator();
     auto qq = &index<N>::__cxxamp_opencl_index;
     int* foo = reinterpret_cast<int*>(&pfe_wrapper<N, Kernel>::__cxxamp_trampoline);
@@ -321,6 +332,7 @@ __attribute__((noinline,used)) completion_future async_parallel_for_each(
     const pfe_wrapper<N, Kernel> _pf(compute_domain, f);
     return completion_future(std::shared_future<void>(*mcw_cxxamp_launch_kernel_async<pfe_wrapper<N, Kernel>, 3>(ext, NULL, _pf)));
 #else
+  int* foo1 = reinterpret_cast<int*>(&Kernel::__cxxamp_trampoline);
     auto bar = &pfe_wrapper<N, Kernel>::operator();
     auto qq = &index<N>::__cxxamp_opencl_index;
     int* foo = reinterpret_cast<int*>(&pfe_wrapper<N, Kernel>::__cxxamp_trampoline);
@@ -341,19 +353,22 @@ __attribute__((noinline,used)) void parallel_for_each(
   if (static_cast<size_t>(compute_domain[0]) > 4294967295L) 
     throw invalid_compute_domain("Extent size too large.");
   if (CLAMP::is_cpu()) {
+#ifdef __CPU__
       {
           Concurrency::Serialize s(nullptr, 0);
           f.__cxxamp_serialize(s);
       }
       std::vector<std::thread> th(NTHREAD);
       for (int i = 0; i < NTHREAD; ++i)
-          th[i] = std::thread(partitioed_task<Kernel, 1>, std::cref(f), std::cref(compute_domain), i);
+          th[i] = std::thread(partitioned_task<Kernel, 1>, std::cref(f), std::cref(compute_domain), i);
       for (auto& t : th)
-          t.join();
+          if (t.joinable())
+              t.join();
       {
           Concurrency::Serialize s(nullptr);
           f.__cxxamp_serialize(s);
       }
+#endif
   } else {
       size_t ext = compute_domain[0];
       mcw_cxxamp_launch_kernel<Kernel, 1>(&ext, NULL, f);
@@ -401,19 +416,22 @@ __attribute__((noinline,used)) void parallel_for_each(
   if (static_cast<size_t>(compute_domain[0]) * static_cast<size_t>(compute_domain[1]) > 4294967295L)
     throw invalid_compute_domain("Extent size too large.");
   if (CLAMP::is_cpu()) {
+#ifdef __CPU__
       {
           Concurrency::Serialize s(nullptr, 0);
           f.__cxxamp_serialize(s);
       }
       std::vector<std::thread> th(NTHREAD);
       for (int i = 0; i < NTHREAD; ++i)
-          th[i] = std::thread(partitioed_task<Kernel, 2>, std::cref(f), std::cref(compute_domain), i);
+          th[i] = std::thread(partitioned_task<Kernel, 2>, std::cref(f), std::cref(compute_domain), i);
       for (auto& t : th)
-          t.join();
+          if (t.joinable())
+              t.join();
       {
           Concurrency::Serialize s(nullptr);
           f.__cxxamp_serialize(s);
       }
+#endif
   } else {
       size_t ext[2] = {static_cast<size_t>(compute_domain[1]),
           static_cast<size_t>(compute_domain[0])};
@@ -469,19 +487,22 @@ __attribute__((noinline,used)) void parallel_for_each(
   if (static_cast<size_t>(compute_domain[0]) * static_cast<size_t>(compute_domain[1]) * static_cast<size_t>(compute_domain[2]) > 4294967295L)
     throw invalid_compute_domain("Extent size too large.");
   if (CLAMP::is_cpu()) {
+#ifdef __CPU__
       {
           Concurrency::Serialize s(nullptr, 0);
           f.__cxxamp_serialize(s);
       }
       std::vector<std::thread> th(NTHREAD);
       for (int i = 0; i < NTHREAD; ++i)
-          th[i] = std::thread(partitioed_task<Kernel, 3>, std::cref(f), std::cref(compute_domain), i);
+          th[i] = std::thread(partitioned_task<Kernel, 3>, std::cref(f), std::cref(compute_domain), i);
       for (auto& t : th)
-          t.join();
+          if (t.joinable())
+              t.join();
       {
           Concurrency::Serialize s(nullptr);
           f.__cxxamp_serialize(s);
       }
+#endif
   } else {
       size_t ext[3] = {static_cast<size_t>(compute_domain[2]),
           static_cast<size_t>(compute_domain[1]),
@@ -544,6 +565,7 @@ __attribute__((noinline,used)) void parallel_for_each(
     throw invalid_compute_domain("Extent can't be evenly divisble by tile size.");
   }
   if (CLAMP::is_cpu()) {
+#ifdef __CPU
       {
           Concurrency::Serialize s(nullptr, 0);
           f.__cxxamp_serialize(s);
@@ -553,13 +575,15 @@ __attribute__((noinline,used)) void parallel_for_each(
       bar_t gbar(D0/k);
       std::vector<std::thread> th(NTHREAD);
       for (int i = 0; i < NTHREAD; ++i)
-          th[i] = std::thread(partitioed_task_tile<Kernel, D0>, std::cref(f), std::cref(compute_domain), i, std::ref(gbar));
+          th[i] = std::thread(partitioned_task_tile<Kernel, D0>, std::cref(f), std::cref(compute_domain), i, std::ref(gbar));
       for (auto& t : th)
-          t.join();
+          if (t.joinable())
+              t.join();
       {
           Concurrency::Serialize s(nullptr);
           f.__cxxamp_serialize(s);
       }
+#endif
   } else
       mcw_cxxamp_launch_kernel<Kernel, 1>(&ext, &tile, f);
 #else //ifndef __GPU__
@@ -619,6 +643,7 @@ __attribute__((noinline,used)) void parallel_for_each(
     throw invalid_compute_domain("Extent can't be evenly divisble by tile size.");
   }
   if (CLAMP::is_cpu()) {
+#ifdef __CPU__
       {
           Concurrency::Serialize s(nullptr, 0);
           f.__cxxamp_serialize(s);
@@ -628,15 +653,17 @@ __attribute__((noinline,used)) void parallel_for_each(
       bar_t gbar(D0/k);
       std::vector<std::thread> th(NTHREAD);
       for (int i = 0; i < NTHREAD; ++i)
-          th[i] = std::thread(partitioed_task_tile<Kernel, D0, D1>,
+          th[i] = std::thread(partitioned_task_tile<Kernel, D0, D1>,
                               std::cref(f), std::cref(compute_domain),
                               i, std::ref(gbar));
       for (auto& t : th)
-          t.join();
+          if (t.joinable())
+              t.join();
       {
           Concurrency::Serialize s(nullptr);
           f.__cxxamp_serialize(s);
       }
+#endif
   } else
       mcw_cxxamp_launch_kernel<Kernel, 2>(ext, tile, f);
 #else //ifndef __GPU__
@@ -706,6 +733,7 @@ __attribute__((noinline,used)) void parallel_for_each(
     throw invalid_compute_domain("Extent can't be evenly divisble by tile size.");
   }
   if (CLAMP::is_cpu()) {
+#ifdef __CPU__
       {
           Concurrency::Serialize s(nullptr, 0);
           f.__cxxamp_serialize(s);
@@ -715,15 +743,17 @@ __attribute__((noinline,used)) void parallel_for_each(
       bar_t gbar(D0/k);
       std::vector<std::thread> th(NTHREAD);
       for (int i = 0; i < NTHREAD; ++i)
-          th[i] = std::thread(partitioed_task_tile<Kernel, D0, D1, D2>,
+          th[i] = std::thread(partitioned_task_tile<Kernel, D0, D1, D2>,
                               std::cref(f), std::cref(compute_domain),
                               i, std::ref(gbar));
       for (auto& t : th)
-          t.join();
+          if (t.joinable())
+              t.join();
       {
           Concurrency::Serialize s(nullptr);
           f.__cxxamp_serialize(s);
       }
+#endif
   } else
       mcw_cxxamp_launch_kernel<Kernel, 3>(ext, tile, f);
 #else //ifndef __GPU__

@@ -219,7 +219,7 @@ namespace fast_math {
       return host_exp2f(x);
     #endif
   }
-  inline float host_fabs(float x) restrict(cpu) { return ::fabs(x); }
+  inline float host_fabs(float x) restrict(cpu,amp) { return std::fabs(x); }
   inline float fabs(float x) restrict(amp, cpu) {
     #ifdef __GPU__
       return opencl_fabs(x);
@@ -320,7 +320,7 @@ namespace fast_math {
     #ifdef __GPU__
       return opencl_isnan(x);
     #else
-      return host_isnan(x);
+      return std::isnan(x);
     #endif
   }
   inline float host_ldexp(float x, int exp) restrict(cpu) { return ::ldexp(x,exp); }
@@ -987,7 +987,7 @@ namespace fast_math {
     #endif
   }
 
-  inline float host_modff(float x, float *iptr) restrict(cpu) { return ::modff(x, iptr); }
+  inline float host_modff(float x, float *iptr) restrict(cpu,amp) { return std::modf(x, iptr); }
   inline float modff(float x, float *iptr) restrict(amp, cpu) {
     #ifdef __GPU__
       return opencl_modff(x, iptr);
@@ -996,7 +996,7 @@ namespace fast_math {
     #endif
   }
 
-  inline float host_modf(float x, float *iptr) restrict(cpu) { return ::modff(x, iptr); }
+  inline float host_modf(float x, float *iptr) restrict(cpu,amp) { return std::modf(x, iptr); }
   inline float modf(float x, float *iptr) restrict(amp, cpu) {
     #ifdef __GPU__
       return opencl_modff(x, iptr);
@@ -1023,7 +1023,7 @@ namespace fast_math {
     #endif
   }
 
-  inline float host_frexp(float x, int *exp) restrict(cpu) { return ::frexp(x, exp); }
+  inline float host_frexp(float x, int *exp) restrict(cpu,amp) { return std::frexp(x, exp); }
   inline float frexp(float x, int *exp) restrict(amp, cpu) {
     #ifdef __GPU__
       return opencl_frexp(x, exp);
