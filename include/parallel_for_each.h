@@ -565,7 +565,7 @@ __attribute__((noinline,used)) void parallel_for_each(
     throw invalid_compute_domain("Extent can't be evenly divisble by tile size.");
   }
   if (CLAMP::is_cpu()) {
-#ifdef __CPU
+#ifdef __CPU__
       {
           Concurrency::Serialize s(nullptr, 0);
           f.__cxxamp_serialize(s);

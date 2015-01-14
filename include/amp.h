@@ -996,7 +996,7 @@ class tiled_index {
   template<int D0_, int D1_, int D2_, typename K>
   friend void parallel_for_each(tiled_extent<D0_, D1_, D2_>, const K&);
   template<typename K, int D1_, int D2_, int D3_>
-  friend void partitioed_task_tile(const K&, const tiled_extent<D1_, D2_, D3_>&, int, bar_t&);
+  friend void partitioned_task_tile(const K&, const tiled_extent<D1_, D2_, D3_>&, int, bar_t&);
   template<int D0_, int D1_, int D2_, typename K>
   friend completion_future async_parallel_for_each(tiled_extent<D0_, D1_, D2_>, const K&);
 };
@@ -1050,7 +1050,7 @@ class tiled_index<D0, 0, 0> {
   template<int D, typename K>
   friend void parallel_for_each(tiled_extent<D>, const K&);
   template<typename K, int D>
-  friend void partitioed_task_tile(const K&, const tiled_extent<D>&, int, bar_t&);
+  friend void partitioned_task_tile(const K&, const tiled_extent<D>&, int, bar_t&);
   template<int D, typename K>
   friend completion_future async_parallel_for_each(tiled_extent<D>, const K&);
 };
@@ -1107,7 +1107,7 @@ class tiled_index<D0, D1, 0> {
   template<int D0_, int D1_, typename K>
   friend void parallel_for_each(tiled_extent<D0_, D1_>, const K&);
   template<typename K, int D1_, int D2_>
-  friend void partitioed_task_tile(const K&, const tiled_extent<D1_, D2_>&, int, bar_t&);
+  friend void partitioned_task_tile(const K&, const tiled_extent<D1_, D2_>&, int, bar_t&);
   template<int D0_, int D1_, typename K>
   friend completion_future async_parallel_for_each(tiled_extent<D0_, D1_>, const K&);
 };
@@ -2269,7 +2269,7 @@ void parallel_for_each(tiled_extent<D0> compute_domain, const Kernel& f);
 
 template <int N, typename Kernel>
 void parallel_for_each(const accelerator_view& accl_view, extent<N> compute_domain, const Kernel& f){
-    if (!CLAMP::is_cpu() && accl_view.get_accelerator() == accelerator(accelerator::cpu_accelerator)) {
+    if (accl_view.get_accelerator() == accelerator(accelerator::cpu_accelerator)) {
       throw runtime_exception(__errorMsg_UnsupportedAccelerator, E_FAIL);
     }
     parallel_for_each(compute_domain, f);
@@ -2277,7 +2277,7 @@ void parallel_for_each(const accelerator_view& accl_view, extent<N> compute_doma
 
 template <int D0, int D1, int D2, typename Kernel>
 void parallel_for_each(const accelerator_view& accl_view, tiled_extent<D0,D1,D2> compute_domain, const Kernel& f) {
-    if (!CLAMP::is_cpu() && accl_view.get_accelerator() == accelerator(accelerator::cpu_accelerator)) {
+    if (accl_view.get_accelerator() == accelerator(accelerator::cpu_accelerator)) {
       throw runtime_exception(__errorMsg_UnsupportedAccelerator, E_FAIL);
     }
     parallel_for_each(compute_domain, f);
@@ -2285,7 +2285,7 @@ void parallel_for_each(const accelerator_view& accl_view, tiled_extent<D0,D1,D2>
 
 template <int D0, int D1, typename Kernel>
 void parallel_for_each(const accelerator_view& accl_view, tiled_extent<D0,D1> compute_domain, const Kernel& f) {
-    if (!CLAMP::is_cpu() && accl_view.get_accelerator() == accelerator(accelerator::cpu_accelerator)) {
+    if (accl_view.get_accelerator() == accelerator(accelerator::cpu_accelerator)) {
       throw runtime_exception(__errorMsg_UnsupportedAccelerator, E_FAIL);
     }
     parallel_for_each(compute_domain, f);
@@ -2293,7 +2293,7 @@ void parallel_for_each(const accelerator_view& accl_view, tiled_extent<D0,D1> co
 
 template <int D0, typename Kernel>
 void parallel_for_each(const accelerator_view& accl_view, tiled_extent<D0> compute_domain, const Kernel& f) {
-    if (!CLAMP::is_cpu() && accl_view.get_accelerator() == accelerator(accelerator::cpu_accelerator)) {
+    if (accl_view.get_accelerator() == accelerator(accelerator::cpu_accelerator)) {
       throw runtime_exception(__errorMsg_UnsupportedAccelerator, E_FAIL);
     }
     parallel_for_each(compute_domain, f);
