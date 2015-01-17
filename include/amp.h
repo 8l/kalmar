@@ -83,7 +83,10 @@ private:
 #define E_FAIL 0x80004005
 #endif
 
+// Remove -Wunneeded-internal-declaration
+#if 0
 static const char *__errorMsg_UnsupportedAccelerator = "concurrency::parallel_for_each is not supported on the selected accelerator \"CPU accelerator\".";
+#endif
 
 class invalid_compute_domain : public runtime_exception
 {
@@ -2249,9 +2252,9 @@ void parallel_for_each(const accelerator_view& accl_view, tiled_extent<D0,D1> co
 
 template <int D0, typename Kernel>
 void parallel_for_each(const accelerator_view& accl_view, tiled_extent<D0> compute_domain, const Kernel& f) {
-    if (accl_view.get_accelerator() == accelerator(accelerator::cpu_accelerator)) {
+    /*if (accl_view.get_accelerator() == accelerator(accelerator::cpu_accelerator)) {
       throw runtime_exception(__errorMsg_UnsupportedAccelerator, E_FAIL);
-    }
+    }*/
     parallel_for_each(compute_domain, f);
 }
 
@@ -2259,7 +2262,16 @@ void parallel_for_each(const accelerator_view& accl_view, tiled_extent<D0> compu
 namespace concurrency = Concurrency;
 // Specialization and inlined implementation of C++AMP classes/templates
 #include "amp_impl.h"
+
+// Remove warning: unused variable 'foo' [-Wunused-variable]
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-variable"
+#endif
 #include "parallel_for_each.h"
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
 
 namespace Concurrency {
 
