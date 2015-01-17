@@ -133,9 +133,6 @@ static inline void mcw_cxxamp_launch_kernel(size_t *ext,
   #if !CXXAMP_SYNC 
   CLAMP::AddKernelEventObject(kernel, kn_event);
   #endif
-#if defined(CXXAMP_NV)
-  aloc.read();
-#endif
 
   #if CXXAMP_SYNC 
   // Provided the queued kernels are independent, we could flush them
@@ -149,7 +146,9 @@ static inline void mcw_cxxamp_launch_kernel(size_t *ext,
     }
   }
   #endif
-
+  #if defined(CXXAMP_NV)
+  aloc.read();
+  #endif
 #endif //CXXAMP_ENABLE_HSA
 #endif // __GPU__
 }
