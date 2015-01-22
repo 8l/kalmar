@@ -1830,7 +1830,8 @@ public:
       operator[] (int i) const restrict(amp,cpu) {
 #ifndef __GPU__
       // FIXME a LOT of synchronize() calls would happen here
-      //synchronize();
+      // Access to any element of it will force synchronizaiton
+      synchronize();
 #endif
           return projection_helper<T, N>::project(*this, i);
       }
