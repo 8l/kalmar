@@ -20,6 +20,9 @@ struct rw_info
 {
     int count;
     bool used;
+    bool discard;
+    bool ready_to_read;
+    cl_mem dm;
 };
 #endif
 struct amp_obj
@@ -154,7 +157,7 @@ struct AMPAllocator
                 cl_int err;
 #if defined(CXXAMP_NV)
                 cl_mem dm = clCreateBuffer(context, CL_MEM_READ_WRITE, count, NULL, &err);
-                rwq[data] = {count, false};
+                rwq[data] = {count, false, false, false, NULL};
 #else
                 cl_mem dm = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_USE_HOST_PTR, count, data, &err);
 #endif
@@ -171,35 +174,66 @@ struct AMPAllocator
 #endif
     }
 #if defined(CXXAMP_NV)
-    void write() {
-        cl_int err;
-        for (auto& it : rwq) {
-            rw_info& rw = it.second;
-            if (rw.used) {
-                err = clEnqueueWriteBuffer(getQueue(), mem_info[it.first].dm, CL_TRUE, 0,
-                                           rw.count, it.first, 0, NULL, NULL);
-                assert(err == CL_SUCCESS);
-            }
+    std::map<void *, rw_info>& synchronize(){
+      return rwq;
+    }
+    
+    void discard(void* data) {
+      for (auto& it : rwq) {
+        rw_info& rw = it.second;
+        if (data == it.first) {
+          #ifdef SYNC_DEBUG
+          printf("discard data %p\n", data);
+          #endif
+          rw.discard = true;
+          break;
         }
+      }
+    }
+    void write() {
+      cl_int err;
+      for (auto& it : rwq) {
+        rw_info& rw = it.second;
+        // Do sync under the following compound condition
+        // (1) if serialized
+        // (2) if not dicarded by users
+        // (3) if device data is still valid
+        if (rw.used && !rw.discard && !rw.ready_to_read) {
+          #ifdef SYNC_DEBUG
+          printf("sync write from host %p, device %p\n", it.first, mem_info[it.first].dm);
+          #endif
+          err = clEnqueueWriteBuffer(getQueue(), mem_info[it.first].dm, CL_TRUE, 0,
+                                     rw.count, it.first, 0, NULL, NULL);
+          assert(err == CL_SUCCESS);
+        }
+      }
     }
     void read() {
-        cl_int err;
-        for (auto& it : rwq) {
-            rw_info& rw = it.second;
-            if (rw.used) {
-                err = clEnqueueReadBuffer(getQueue(), mem_info[it.first].dm, CL_TRUE, 0,
-                                          rw.count, it.first, 0, NULL, NULL);
-                assert(err == CL_SUCCESS);
-                rw.used = false;
-            }
+      for (auto& it : rwq) {
+        rw_info& rw = it.second;
+        if (rw.used) {
+          #ifdef SYNC_DEBUG
+          printf("need read host %p, device %p\n", it.first, mem_info[it.first].dm);
+          #endif
+          rw.ready_to_read = true;
+          rw.dm = mem_info[it.first].dm;
         }
+      }
     }
 #endif
     void free(void *data) {
         auto iter = mem_info.find(data);
         if (iter != std::end(mem_info) && --iter->second.count == 0) {
+            #ifdef SYNC_DEBUG
+            printf("Release mem data=%p, dm=%p\n", data, iter->second.dm);
+            #endif
             clReleaseMemObject(iter->second.dm);
             mem_info.erase(iter);
+            #if CXXAMP_NV
+            auto it = rwq.find(data);
+            if (it != std::end(rwq))
+              rwq.erase(it);
+            #endif
         }
     }
     ~AMPAllocator() {
@@ -231,31 +265,66 @@ struct mm_info
 {
     std::vector<cl_kernel> serializedKernel;
     void *data;
+    bool discard;
+    bool sync;
     bool free;
     //static int waitOnKernelsCount;
     mm_info(int count)
-        : data(aligned_alloc(0x1000, count)), free(true) { getAllocator().init(data, count); }
+      : data(aligned_alloc(0x1000, count)), discard(false), free(true) { getAllocator().init(data, count); }
     mm_info(int count, void *src)
-        : data(src), free(false) { getAllocator().init(data, count); }
+      : data(src), discard(false), free(false) { getAllocator().init(data, count); }
     void synchronize() {
-        //printf("mm_info::synchronize() : %d\n", ++waitOnKernelsCount);
-        waitOnKernels();
+      #if CXXAMP_NV
+      std::map<void *, rw_info> &rwq = getAllocator().synchronize();
+      {
+        cl_int err;
+        for (auto& it : rwq) {
+          rw_info& rw = it.second;
+          // Do sync under the following compound condition
+          // (1) if serialized
+          // (2) if device data is validated
+          // (3) if is the interested host pointer
+          if (rw.used && rw.ready_to_read && it.first == data) {
+            #ifdef SYNC_DEBUG
+            printf("sync read back to host=%p, device=%p\n\n",data, rw.dm);
+            #endif
+            err = clEnqueueReadBuffer(getAllocator().getQueue(), rw.dm, CL_TRUE, 0,
+                                      rw.count, data, 0, NULL, NULL);
+            assert(err == CL_SUCCESS);
+            rw.used = false;
+            rw.ready_to_read = false;
+          }
+        }
+      }
+      #endif
+      //printf("mm_info::synchronize() : %d\n", ++waitOnKernelsCount);
+      waitOnKernels();
     }
     void refresh() {}
     void* get() { return data; }
-    void disc() {}
+    void disc() {
+      discard = true;
+      #if CXXAMP_NV
+      getAllocator().discard(data);
+      #endif
+    }
     void serialize(Serialize& s) {
-        #if !CXXAMP_SYNC
-        serializedKernel.push_back(s.getKernel());
-        #endif
-        getAllocator().append(s, data);
+      #ifdef SYNC_DEBUG
+      printf("serialize, data=%p\n",data);
+      #endif
+      #if !CXXAMP_SYNC
+      serializedKernel.push_back(s.getKernel());
+      #endif
+      getAllocator().append(s, data);
     }
     ~mm_info() {
         //printf("mm_info::~mm_info() : %d\n", ++waitOnKernelsCount);
-        waitOnKernels();
-        getAllocator().free(data);
-        if (free)
-            ::operator delete(data);
+      waitOnKernels();
+      getAllocator().free(data);
+      //free = true;
+      if (0) {
+        ::operator delete(data);
+      }
     }
     void waitOnKernels() {
         #if !CXXAMP_SYNC
