@@ -9,7 +9,9 @@
 #include <cassert>
 #include <future>
 #include <utility>
+#ifdef __AMP_CPU__
 #include <thread>
+#endif
 
 #include <amp.h>
 #include <amp_runtime.h>
@@ -17,6 +19,7 @@
 namespace Concurrency {
 
 
+#ifdef __AMP_CPU__
 #define SSIZE 1024 * 10
 const unsigned int NTHREAD = std::thread::hardware_concurrency();
 template <int N, typename Kernel,  int K>
@@ -154,7 +157,7 @@ void partitioned_task_tile(const Kernel& f, const tiled_extent<D0, D1, D2>& ext,
                 }
             }
 }
-
+#endif
 
 static inline std::string mcw_cxxamp_fixnames(char *f) restrict(cpu,amp) {
     std::string s(f);
@@ -203,7 +206,6 @@ static inline void mcw_cxxamp_launch_kernel(size_t *ext,
   //to ensure functor has right operator() defined
   //this triggers the trampoline code being emitted
   // FIXME: implicitly casting to avoid pointer to int error
-
   int* foo = reinterpret_cast<int*>(&Kernel::__cxxamp_trampoline);
   void *kernel = NULL;
   {
@@ -279,7 +281,7 @@ __attribute__((noinline,used)) void parallel_for_each(
         static_cast<size_t>(compute_domain[N - 2]),
         static_cast<size_t>(compute_domain[N - 3])};
     if (CLAMP::is_cpu()) {
-#ifdef __CPU__
+#ifdef __AMP_CPU__
         {
           Concurrency::Serialize s(nullptr, 0);
           f.__cxxamp_serialize(s);
@@ -353,7 +355,7 @@ __attribute__((noinline,used)) void parallel_for_each(
   if (static_cast<size_t>(compute_domain[0]) > 4294967295L) 
     throw invalid_compute_domain("Extent size too large.");
   if (CLAMP::is_cpu()) {
-#ifdef __CPU__
+#ifdef __AMP_CPU__
       {
           Concurrency::Serialize s(nullptr, 0);
           f.__cxxamp_serialize(s);
@@ -416,7 +418,7 @@ __attribute__((noinline,used)) void parallel_for_each(
   if (static_cast<size_t>(compute_domain[0]) * static_cast<size_t>(compute_domain[1]) > 4294967295L)
     throw invalid_compute_domain("Extent size too large.");
   if (CLAMP::is_cpu()) {
-#ifdef __CPU__
+#ifdef __AMP_CPU__
       {
           Concurrency::Serialize s(nullptr, 0);
           f.__cxxamp_serialize(s);
@@ -487,7 +489,7 @@ __attribute__((noinline,used)) void parallel_for_each(
   if (static_cast<size_t>(compute_domain[0]) * static_cast<size_t>(compute_domain[1]) * static_cast<size_t>(compute_domain[2]) > 4294967295L)
     throw invalid_compute_domain("Extent size too large.");
   if (CLAMP::is_cpu()) {
-#ifdef __CPU__
+#ifdef __AMP_CPU__
       {
           Concurrency::Serialize s(nullptr, 0);
           f.__cxxamp_serialize(s);
@@ -565,7 +567,7 @@ __attribute__((noinline,used)) void parallel_for_each(
     throw invalid_compute_domain("Extent can't be evenly divisble by tile size.");
   }
   if (CLAMP::is_cpu()) {
-#ifdef __CPU__
+#ifdef __AMP_CPU__
       {
           Concurrency::Serialize s(nullptr, 0);
           f.__cxxamp_serialize(s);
@@ -643,7 +645,7 @@ __attribute__((noinline,used)) void parallel_for_each(
     throw invalid_compute_domain("Extent can't be evenly divisble by tile size.");
   }
   if (CLAMP::is_cpu()) {
-#ifdef __CPU__
+#ifdef __AMP_CPU__
       {
           Concurrency::Serialize s(nullptr, 0);
           f.__cxxamp_serialize(s);
@@ -733,7 +735,7 @@ __attribute__((noinline,used)) void parallel_for_each(
     throw invalid_compute_domain("Extent can't be evenly divisble by tile size.");
   }
   if (CLAMP::is_cpu()) {
-#ifdef __CPU__
+#ifdef __AMP_CPU__
       {
           Concurrency::Serialize s(nullptr, 0);
           f.__cxxamp_serialize(s);

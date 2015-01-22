@@ -27,7 +27,9 @@
 #include <algorithm>
 #include <set>
 #include <type_traits>
+#ifdef __AMP_CPU__
 #include <ucontext.h>
+#endif
 // CLAMP
 #include <serialize.h>
 #define __global
@@ -693,13 +695,18 @@ private:
 
     __attribute__((annotate("__cxxamp_opencl_index")))
         void __cxxamp_opencl_index() restrict(amp,cpu)
-        {
 #ifdef __GPU__
+        {
             index_helper<N, index<N>>::set(*this);
+        }
+#elif __AMP_CPU__
+    {}
+#else
+    ;
 #endif
-        };
 };
 
+#ifdef __AMP_CPU__
 template <typename Ker, typename Ti>
 void bar_wrapper(Ker *f, Ti *t)
 {
@@ -726,6 +733,7 @@ struct barrier_t {
         swapcontext(&ctx[idx + 1], &ctx[idx]);
     }
 };
+#endif
 
 #ifndef CLK_LOCAL_MEM_FENCE
 #define CLK_LOCAL_MEM_FENCE (1)
@@ -738,42 +746,48 @@ struct barrier_t {
 // C++AMP LPM 4.5
 class tile_barrier {
  public:
-     tile_barrier() restrict(amp,cpu) = default;
+#ifdef __AMP_CPU__
   using pb_t = std::shared_ptr<barrier_t>;
-  pb_t pbar;
   tile_barrier(pb_t pb) : pbar(pb) {}
-
   tile_barrier(const tile_barrier& other) restrict(amp,cpu) : pbar(other.pbar) {}
-
-#ifdef __GPU__
-  void wait() const restrict(amp) {
-    wait_with_all_memory_fence();
-  }
-  void wait_with_all_memory_fence() const restrict(amp) {
-    amp_barrier(CLK_LOCAL_MEM_FENCE | CLK_GLOBAL_MEM_FENCE);
-  }
-  void wait_with_global_memory_fence() const restrict(amp) {
-    amp_barrier(CLK_GLOBAL_MEM_FENCE);
-  }
-  void wait_with_tile_static_memory_fence() const restrict(amp) {
-    amp_barrier(CLK_LOCAL_MEM_FENCE);
-  }
 #else
+  tile_barrier(const tile_barrier& other) restrict(amp,cpu) {}
+#endif
   void wait() const restrict(amp) {
+#ifdef __GPU__
+    wait_with_all_memory_fence();
+#elif __AMP_CPU__
       pbar->wait();
+#endif
   }
   void wait_with_all_memory_fence() const restrict(amp) {
+#ifdef __GPU__
+    amp_barrier(CLK_LOCAL_MEM_FENCE | CLK_GLOBAL_MEM_FENCE);
+#elif __AMP_CPU__
       pbar->wait();
+#endif
   }
   void wait_with_global_memory_fence() const restrict(amp) {
+#ifdef __GPU__
+    amp_barrier(CLK_GLOBAL_MEM_FENCE);
+#elif __AMP_CPU__
       pbar->wait();
+#endif
   }
   void wait_with_tile_static_memory_fence() const restrict(amp) {
+#ifdef __GPU__
+    amp_barrier(CLK_LOCAL_MEM_FENCE);
+#elif __AMP_CPU__
       pbar->wait();
-  }
 #endif
-
+  }
  private:
+#ifdef __AMP_CPU__
+  tile_barrier() restrict(amp,cpu) = default;
+  pb_t pbar;
+#else
+  tile_barrier() restrict(amp) {}
+#endif
   template<int D0, int D1, int D2>
   friend class tiled_index;
 };
@@ -938,7 +952,9 @@ private:
 
 // C++AMP LPM 4.4.1
 
+#ifdef __AMP_CPU__
 struct bar_t;
+#endif
 
 template <int D0, int D1=0, int D2=0>
 class tiled_index {
@@ -963,6 +979,7 @@ class tiled_index {
   static const int tile_dim1 = D1;
   static const int tile_dim2 = D2;
  private:
+#ifdef __AMP_CPU__
   tiled_index& operator=(const tiled_index& other) {
       const_cast<index<3>&>(global) = other.global;
       const_cast<index<3>&>(local) = other.local;
@@ -977,7 +994,7 @@ class tiled_index {
               int c0, int c1, int c2, tile_barrier& pb) restrict(amp,cpu)
       : global(a2, a1, a0), local(b2, b1, b0), tile(c2, c1, c0),
       tile_origin(a2 - b2, a1 - b1, a0 - b0), barrier(pb), tile_extent(D0, D1, D2) {}
-
+#endif
   //CLAMP
   __attribute__((annotate("__cxxamp_opencl_index")))
 #ifdef __GPU__
@@ -989,14 +1006,18 @@ class tiled_index {
                          amp_get_global_id(1)-amp_get_local_id(1),
                          amp_get_global_id(0)-amp_get_local_id(0))),
     tile_extent(D0, D1, D2)
-#else
+#elif __AMP_CPU__
   __attribute__((always_inline)) tiled_index() restrict(amp, cpu)
+#else
+  __attribute__((always_inline)) tiled_index() restrict(amp)
 #endif // __GPU__
   {}
   template<int D0_, int D1_, int D2_, typename K>
   friend void parallel_for_each(tiled_extent<D0_, D1_, D2_>, const K&);
+#ifdef __AMP_CPU__
   template<typename K, int D1_, int D2_, int D3_>
   friend void partitioned_task_tile(const K&, const tiled_extent<D1_, D2_, D3_>&, int, bar_t&);
+#endif
   template<int D0_, int D1_, int D2_, typename K>
   friend completion_future async_parallel_for_each(tiled_extent<D0_, D1_, D2_>, const K&);
 };
@@ -1021,6 +1042,7 @@ class tiled_index<D0, 0, 0> {
   }
   static const int tile_dim0 = D0;
  private:
+#ifdef __AMP_CPU__
   tiled_index& operator=(const tiled_index& other) {
       const_cast<index<1>&>(global) = other.global;
       const_cast<index<1>&>(local) = other.local;
@@ -1033,7 +1055,7 @@ class tiled_index<D0, 0, 0> {
   //CLAMP
   __attribute__((always_inline)) tiled_index(int a, int b, int c, tile_barrier& pb) restrict(amp, cpu)
   : global(a), local(b), tile(c), tile_origin(a - b), barrier(pb), tile_extent(D0) {}
-
+#endif
   //CLAMP
   __attribute__((annotate("__cxxamp_opencl_index")))
 #ifdef __GPU__
@@ -1043,14 +1065,18 @@ class tiled_index<D0, 0, 0> {
     tile(index<1>(amp_get_group_id(0))),
     tile_origin(index<1>(amp_get_global_id(0)-amp_get_local_id(0))),
     tile_extent(D0)
-#else
+#elif __AMP_CPU__
   __attribute__((always_inline)) tiled_index() restrict(amp,cpu)
+#else
+  __attribute__((always_inline)) tiled_index() restrict(amp)
 #endif // __GPU__
   {}
   template<int D, typename K>
   friend void parallel_for_each(tiled_extent<D>, const K&);
+#ifdef __AMP_CPU__
   template<typename K, int D>
   friend void partitioned_task_tile(const K&, const tiled_extent<D>&, int, bar_t&);
+#endif
   template<int D, typename K>
   friend completion_future async_parallel_for_each(tiled_extent<D>, const K&);
 };
@@ -1076,6 +1102,7 @@ class tiled_index<D0, D1, 0> {
   static const int tile_dim0 = D0;
   static const int tile_dim1 = D1;
  private:
+#ifdef __AMP_CPU__
   tiled_index& operator=(const tiled_index& other) {
       const_cast<index<2>&>(global) = other.global;
       const_cast<index<2>&>(local) = other.local;
@@ -1089,7 +1116,7 @@ class tiled_index<D0, D1, 0> {
   tiled_index(int a0, int a1, int b0, int b1, int c0, int c1, tile_barrier& tbar) restrict(amp, cpu)
       : global(a1, a0), local(b1, b0), tile(c1, c0), tile_origin(a1 - b1, a0 - b0),
       barrier(tbar), tile_extent(D0, D1) {}
-
+#endif
   //CLAMP
   __attribute__((annotate("__cxxamp_opencl_index")))
 #ifdef __GPU__
@@ -1100,14 +1127,18 @@ class tiled_index<D0, D1, 0> {
     tile_origin(index<2>(amp_get_global_id(1)-amp_get_local_id(1),
                          amp_get_global_id(0)-amp_get_local_id(0))),
     tile_extent(D0, D1)
-#else
+#elif __AMP_CPU__
   __attribute__((always_inline)) tiled_index() restrict(amp,cpu)
+#else
+  __attribute__((always_inline)) tiled_index() restrict(amp)
 #endif // __GPU__
   {}
   template<int D0_, int D1_, typename K>
   friend void parallel_for_each(tiled_extent<D0_, D1_>, const K&);
+#ifdef __AMP_CPU__
   template<typename K, int D1_, int D2_>
   friend void partitioned_task_tile(const K&, const tiled_extent<D1_, D2_>&, int, bar_t&);
+#endif
   template<int D0_, int D1_, typename K>
   friend completion_future async_parallel_for_each(tiled_extent<D0_, D1_>, const K&);
 };
@@ -1379,7 +1410,10 @@ public:
   __attribute__((annotate("serialize")))
   void __cxxamp_serialize(Serialize& s) const {
     array<T, N>* p_arr = (array<T, N>*)m_arr;
-    if (!CLAMP::is_cpu() && p_arr && p_arr->pav &&
+    if (p_arr && p_arr->pav &&
+#ifdef __AMP_CPU__
+        !CLAMP::is_cpu() &&
+#endif
         p_arr->pav->get_accelerator() == accelerator(accelerator::cpu_accelerator)) {
       throw runtime_exception(__errorMsg_UnsupportedAccelerator, E_FAIL);
     }    
@@ -1569,7 +1603,11 @@ public:
 
   __global T& operator[](const index<N>& idx) restrict(amp,cpu) {
 #ifndef __GPU__
-      if(!CLAMP::is_cpu() && pav && (pav->get_accelerator() == accelerator(accelerator::gpu_accelerator))) {
+      if(pav && (pav->get_accelerator() == accelerator(accelerator::gpu_accelerator))
+#ifdef __AMP_CPU__
+         && !CLAMP::is_cpu()
+#endif
+        ) {
           throw runtime_exception("The array is not accessible on CPU.", 0);
       }
 #endif
@@ -1578,7 +1616,11 @@ public:
   }
   __global const T& operator[](const index<N>& idx) const restrict(amp,cpu) {
 #ifndef __GPU__
-      if(!CLAMP::is_cpu() && pav && (pav->get_accelerator() == accelerator(accelerator::gpu_accelerator))) {
+      if(pav && (pav->get_accelerator() == accelerator(accelerator::gpu_accelerator))
+#ifdef __AMP_CPU__
+         && !CLAMP::is_cpu()
+#endif
+        ) {
           throw runtime_exception("The array is not accessible on CPU.", 0);
       }
 #endif
@@ -2584,7 +2626,7 @@ static inline unsigned atomic_fetch_add(unsigned *x, unsigned y) restrict(amp,cp
 static inline int atomic_fetch_add(int *x, int y) restrict(amp,cpu) {
   return atomic_add_int(x, y);
 }
-#else
+#elif __AMP_CPU__
 unsigned atomic_add_unsigned(unsigned *p, unsigned val);
 int atomic_add_int(int *p, int val);
 static inline unsigned atomic_fetch_add(unsigned *x, unsigned y) restrict(amp,cpu) {
@@ -2593,6 +2635,9 @@ static inline unsigned atomic_fetch_add(unsigned *x, unsigned y) restrict(amp,cp
 static inline int atomic_fetch_add(int *x, int y) restrict(amp,cpu) {
   return atomic_add_int(x, y);
 }
+#else
+extern unsigned atomic_fetch_add(unsigned *x, unsigned y) restrict(amp,cpu);
+extern int atomic_fetch_add(int *x, int y) restrict(amp, cpu);
 #endif
 
 #ifdef __GPU__
@@ -2614,8 +2659,7 @@ static inline unsigned atomic_fetch_inc(unsigned *x) restrict(amp,cpu) {
 static inline int atomic_fetch_inc(int *x) restrict(amp,cpu) {
   return atomic_inc_int(x);
 }
-#else
-
+#elif __AMP_CPU__
 unsigned atomic_max_unsigned(unsigned *p, unsigned val);
 int atomic_max_int(int *p, int val);
 
@@ -2634,7 +2678,12 @@ static inline unsigned atomic_fetch_inc(unsigned *x) restrict(amp,cpu) {
 static inline int atomic_fetch_inc(int *x) restrict(amp,cpu) {
   return atomic_inc_int(x);
 }
+#else
+extern int atomic_fetch_inc(int * _Dest) restrict(amp, cpu);
+extern unsigned atomic_fetch_inc(unsigned * _Dest) restrict(amp, cpu);
 
+extern int atomic_fetch_max(int * dest, int val) restrict(amp, cpu);
+extern unsigned int atomic_fetch_max(unsigned int * dest, unsigned int val) restrict(amp, cpu);
 #endif
 
 }//namespace Concurrency
