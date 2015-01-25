@@ -179,15 +179,12 @@ struct AMPAllocator
     }
     
     void discard(void* data) {
-      for (auto& it : rwq) {
-        rw_info& rw = it.second;
-        if (data == it.first) {
-          #ifdef SYNC_DEBUG
-          printf("discard data %p\n", data);
-          #endif
-          rw.discard = true;
-          break;
-        }
+      auto it = rwq.find(data);
+      if (it != std::end(rwq)) {
+        #ifdef SYNC_DEBUG
+        printf("discard data %p\n", data);
+        #endif
+        it->second.discard = true;
       }
     }
     void write() {
@@ -222,19 +219,19 @@ struct AMPAllocator
     }
 #endif
     void free(void *data) {
-        auto iter = mem_info.find(data);
-        if (iter != std::end(mem_info) && --iter->second.count == 0) {
-            #ifdef SYNC_DEBUG
-            printf("Release mem data=%p, dm=%p\n", data, iter->second.dm);
-            #endif
-            clReleaseMemObject(iter->second.dm);
-            mem_info.erase(iter);
-            #if CXXAMP_NV
-            auto it = rwq.find(data);
-            if (it != std::end(rwq))
-              rwq.erase(it);
-            #endif
-        }
+      auto iter = mem_info.find(data);
+      if (iter != std::end(mem_info) && --iter->second.count == 0) {
+        #ifdef SYNC_DEBUG
+        printf("Release mem data=%p, dm=%p\n", data, iter->second.dm);
+        #endif
+        clReleaseMemObject(iter->second.dm);
+        mem_info.erase(iter);
+        #if CXXAMP_NV
+        auto it = rwq.find(data);
+        if (it != std::end(rwq))
+          rwq.erase(it);
+        #endif
+      }
     }
     ~AMPAllocator() {
         clReleaseProgram(program);

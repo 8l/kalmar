@@ -1517,6 +1517,7 @@ public:
       if(pav && (pav->get_accelerator() == accelerator(accelerator::gpu_accelerator))) {
           throw runtime_exception("The array is not accessible on CPU.", 0);
       }
+      m_device.synchronize();
 #endif
       __global T *ptr = reinterpret_cast<__global T*>(m_device.get());
       return ptr[amp_helper<N, index<N>, Concurrency::extent<N>>::flatten(idx, extent)];
@@ -1526,6 +1527,7 @@ public:
       if(pav && (pav->get_accelerator() == accelerator(accelerator::gpu_accelerator))) {
           throw runtime_exception("The array is not accessible on CPU.", 0);
       }
+      m_device.synchronize();
 #endif
       __global T *ptr = reinterpret_cast<__global T*>(m_device.get());
       return ptr[amp_helper<N, index<N>, Concurrency::extent<N>>::flatten(idx, extent)];
@@ -1533,11 +1535,17 @@ public:
 
   typename array_projection_helper<T, N>::result_type
       operator[] (int i) restrict(amp,cpu) {
-          return array_projection_helper<T, N>::project(*this, i);
+        #ifndef __GPU__
+        m_device.synchronize();
+        #endif
+        return array_projection_helper<T, N>::project(*this, i);
       }
   typename array_projection_helper<T, N>::const_result_type
       operator[] (int i) const restrict(amp,cpu) {
-          return array_projection_helper<T, N>::project(*this, i);
+        #ifndef __GPU__
+        m_device.synchronize();
+        #endif
+        return array_projection_helper<T, N>::project(*this, i);
       }
 
   __global T& operator()(const index<N>& idx) restrict(amp,cpu) {
@@ -1682,8 +1690,11 @@ public:
     // TODO: If array's buffer is inaccessible on CPU, host pointer to that buffer must be NULL
     if(cpu_access_type == access_type_none) {
       //return reinterpret_cast<T*>(NULL);
-    }      
+    }
+    // Accessing to the host pointer wont force sync
+    #if 0
     m_device.synchronize();
+    #endif
 #endif
     return reinterpret_cast<T*>(m_device.get());
   }
@@ -2275,7 +2286,13 @@ namespace concurrency = Concurrency;
 #endif
 
 namespace Concurrency {
+// FIXME: the following overloadded Concurrency::copy only copy host2host
+// These are implementation specific for the implicit sync have been done earilier.
+// However, according to the specifciations, when src and des are located in different 
+// accelerators, we need to consider copying data from CPU to GPU or vice versa.
 
+// For now, it is not safe to use all these copy routines since implicit syncs most likely
+// never happen before.
 template <typename T>
 void copy(const array_view<const T, 1>& src, const array_view<T, 1>& dest) {
     for (int i = 0; i < dest.get_extent()[0]; ++i)
