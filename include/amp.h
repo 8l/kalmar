@@ -2286,7 +2286,13 @@ namespace concurrency = Concurrency;
 #endif
 
 namespace Concurrency {
+// FIXME: the following overloadded Concurrency::copy only copy host2host
+// These are implementation specific for the implicit sync have been done earilier.
+// However, according to the specifciations, when src and des are located in different 
+// accelerators, we need to consider copying data from CPU to GPU or vice versa.
 
+// For now, it is not safe to use all these copy routines since implicit syncs most likely
+// never happen before.
 template <typename T>
 void copy(const array_view<const T, 1>& src, const array_view<T, 1>& dest) {
     for (int i = 0; i < dest.get_extent()[0]; ++i)
