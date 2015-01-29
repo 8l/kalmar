@@ -14,17 +14,7 @@
 /* Flag set by ‘--verbose’. */
 static int verbose_flag;
 static bool build_mode = false, install_mode = true; // use install mode by default
-
 static bool bolt_rewrite_mode = false;
-
-void replace(std::string& str,
-        const std::string& from, const std::string& to) {
-    size_t start_pos = str.find(from);
-    while(start_pos != std::string::npos) {
-        str.replace(start_pos, from.length(), to);
-        start_pos = str.find(from);
-    }
-}
 
 void cxxflags(void) {
     if (!build_mode && !install_mode) {

@@ -35,7 +35,7 @@ inline accelerator::accelerator(const std::wstring& path) :
 					path : 
 					(_default_accelerator != nullptr) ?
 						accelerator::_default_accelerator->get_device_path() :
-						std::wstring(gpu_accelerator) ),
+                        std::wstring(gpu_accelerator) ),
   version(0), 
   description(L""),
   is_debug(false),
@@ -123,10 +123,20 @@ inline bool accelerator::set_default_cpu_access_type(access_type type) {
         ((type&access_type_read) || (type&access_type_write))) {
     // TODO: Throw runtime exception here 
   }
+#ifdef __AMP_CPU__
   if(type == access_type_auto)
-    default_access_type = access_type_none;
+      default_access_type = access_type_none;
   else
-    default_access_type = type;
+      default_access_type = type;
+#else
+  if (&default_view->get_accelerator() == this) {
+      if(type == access_type_auto)
+          default_access_type = access_type_none;
+      else
+          default_access_type = type;
+  } else
+      default_view->get_accelerator().set_default_cpu_access_type(type);
+#endif
   return true;
 }
 inline access_type accelerator::get_default_cpu_access_type() const {return default_access_type;}
