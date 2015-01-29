@@ -1,3 +1,4 @@
+// XFAIL: Linux
 // RUN: %cxxamp %s -o %t.out && %t.out
 #include <vector>
 #include <amp.h>
