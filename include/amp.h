@@ -1691,8 +1691,8 @@ public:
     if(cpu_access_type == access_type_none) {
       //return reinterpret_cast<T*>(NULL);
     }
-    // Accessing to the host pointer wont force sync
-    #if 0
+    // TODO: accessing to the host pointer shall not force sync. Will fix
+    #if 1
     m_device.synchronize();
     #endif
 #endif
@@ -1938,7 +1938,10 @@ public:
   }
   T* data() const restrict(amp,cpu) {
 #ifndef __GPU__
+      // TODO: accessing to the host pointer shall not force sync. Will fix
+      #if 1
       synchronize();
+      #endif
 #endif
     static_assert(N == 1, "data() is only permissible on array views of rank 1");
     return reinterpret_cast<T*>(cache.get() + offset + index_base[0]);
