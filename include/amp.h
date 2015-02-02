@@ -1691,8 +1691,8 @@ public:
     if(cpu_access_type == access_type_none) {
       //return reinterpret_cast<T*>(NULL);
     }
-    // Accessing to the host pointer wont force sync
-    #if 0
+    // TODO: accessing to the host pointer shall not force sync. Will fix
+    #if 1
     m_device.synchronize();
     #endif
 #endif
@@ -1938,7 +1938,10 @@ public:
   }
   T* data() const restrict(amp,cpu) {
 #ifndef __GPU__
+      // TODO: accessing to the host pointer shall not force sync. Will fix
+      #if 1
       synchronize();
+      #endif
 #endif
     static_assert(N == 1, "data() is only permissible on array views of rank 1");
     return reinterpret_cast<T*>(cache.get() + offset + index_base[0]);
@@ -2406,6 +2409,22 @@ void copy(InputIter srcBegin, const array_view<T, 1>& dest) {
         ++srcBegin;
     }
 }
+#if CXXAMP_NV
+// Extend for data copying from raw pointer
+template <typename T>
+void copy(T* srcBegin, const array_view<T, 1>& dest) {
+    // TODO: how to determine if dest is not accessible on host (write-only)
+    cl_mem dm = static_cast<cl_mem>(getAllocator().device_data(dest.data()));
+    if(dm)
+      clEnqueueWriteBuffer(getAllocator().getQueue(), dm, CL_TRUE, 0,
+                           dest.get_extent()[0]*sizeof(T), srcBegin, 0, NULL, NULL);
+    // FIXME: The codes are needed for now. Will remove host2host copying later
+    for (int i = 0; i < dest.get_extent()[0]; ++i) {
+        reinterpret_cast<T&>(dest[i]) = *srcBegin;
+        ++srcBegin;
+    }
+}
+#endif
 template <typename InputIter, typename T, int N>
 void copy(InputIter srcBegin, const array_view<T, N>& dest) {
     int adv = dest.get_extent().size() / dest.get_extent()[0];
@@ -2438,7 +2457,22 @@ void copy(const array_view<T, 1> &src, OutputIter destBegin) {
         destBegin++;
     }
 }
-
+#if CXXAMP_NV
+// Extend for copying to raw pointer
+template <typename T>
+void copy(const array_view<T, 1> &src, T* destBegin) {
+    // TODO: how to determine if dest is not accessible on host (write-only)
+    cl_mem dm = static_cast<cl_mem>(getAllocator().device_data(src.data()));
+    if(dm)
+      clEnqueueReadBuffer(getAllocator().getQueue(), dm, CL_TRUE, 0,
+                          src.get_extent()[0]*sizeof(T), destBegin, 0, NULL, NULL);
+    // FIXME: The codes are needed for now. Will remove host2host copying later
+    for (int i = 0; i < src.get_extent()[0]; ++i) {
+        *destBegin = (src.get_data(i));
+        destBegin++;
+    }
+}
+#endif
 template <typename OutputIter, typename T, int N>
 void copy(const array_view<T, N> &src, OutputIter destBegin) {
     int adv = src.get_extent().size() / src.get_extent()[0];

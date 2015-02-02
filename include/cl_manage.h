@@ -163,9 +163,16 @@ struct AMPAllocator
 #endif
                 assert(err == CL_SUCCESS);
                 mem_info[data] = {dm, 1};
+                #if SYNC_DEBUG
+                printf("init data=%p, device=%p, count=%d\n", data, dm, count);
+                #endif
             }
-        } else
+        } else {
+            #if SYNC_DEBUG
+            printf("retain data=%p, device=%p, count=%d\n", data, iter->second.dm,count);
+            #endif
             ++iter->second.count;
+          }
     }
     void append(Serialize& s, void *data) {
         s.Append(sizeof(cl_mem), &mem_info[data].dm);
@@ -204,6 +211,14 @@ struct AMPAllocator
           assert(err == CL_SUCCESS);
         }
       }
+    }
+    // Used in Concurrency::copy
+    void* device_data(void* data) {
+      auto it = rwq.find(data);
+      if (it != std::end(rwq)) {
+        return mem_info[data].dm;
+      }
+      return NULL;
     }
     void read() {
       for (auto& it : rwq) {
@@ -283,7 +298,7 @@ struct mm_info
           // (3) if is the interested host pointer
           if (rw.used && rw.ready_to_read && it.first == data) {
             #ifdef SYNC_DEBUG
-            printf("sync read back to host=%p, device=%p\n\n",data, rw.dm);
+            printf("sync read back to host=%p, device=%p, count=%d\n\n",data, rw.dm, rw.count);
             #endif
             err = clEnqueueReadBuffer(getAllocator().getQueue(), rw.dm, CL_TRUE, 0,
                                       rw.count, data, 0, NULL, NULL);
@@ -317,6 +332,8 @@ struct mm_info
     ~mm_info() {
         //printf("mm_info::~mm_info() : %d\n", ++waitOnKernelsCount);
       waitOnKernels();
+      if (!discard)
+        synchronize();
       getAllocator().free(data);
       //free = true;
       if (0) {
