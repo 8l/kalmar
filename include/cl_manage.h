@@ -332,6 +332,8 @@ struct mm_info
     ~mm_info() {
         //printf("mm_info::~mm_info() : %d\n", ++waitOnKernelsCount);
       waitOnKernels();
+      if (!discard)
+        synchronize();
       getAllocator().free(data);
       //free = true;
       if (0) {
