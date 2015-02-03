@@ -13,6 +13,11 @@
 //  instance. For now, we haven't implemented such binding nor actual
 //  implementation of accelerator.
 
+
+#ifdef __AMP_CPU__
+#include <amp_cpu.h>
+#else
+
 #pragma once
 
 #include <cassert>
@@ -2527,3 +2532,4 @@ extern unsigned int atomic_fetch_max(unsigned int * dest, unsigned int val) rest
 #endif
 
 }//namespace Concurrency
+#endif

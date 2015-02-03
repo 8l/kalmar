@@ -5,6 +5,9 @@
 //
 //===----------------------------------------------------------------------===//
 
+#ifdef __AMP_CPU__
+#include <pfe_cpu.h>
+#else
 #pragma once
 #include <cassert>
 #include <future>
@@ -510,3 +513,4 @@ __attribute__((noinline,used)) completion_future async_parallel_for_each(
 #pragma clang diagnostic pop
 
 } // namespace Concurrency
+#endif

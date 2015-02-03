@@ -5,6 +5,10 @@
 //
 //===----------------------------------------------------------------------===//
 
+#ifdef __AMP_CPU__
+#include <amp_cpu_math.h>
+#else
+
 #pragma once
   #include <cmath>
 #ifdef __GPU__
@@ -1126,3 +1130,4 @@ namespace fast_math {
 } // namespace precise_math
 
 } // namespace Concurrency
+#endif

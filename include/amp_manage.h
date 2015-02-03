@@ -5,6 +5,10 @@
 //
 //===----------------------------------------------------------------------===//
 
+#ifdef __AMP_CPU__
+#include <amp_cpu_manage.h>
+#else
+
 #pragma once
 
 #include <amp_allocator.h>
@@ -105,3 +109,4 @@ public:
 };
 
 } // namespace Concurrency
+#endif

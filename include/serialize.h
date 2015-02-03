@@ -5,6 +5,9 @@
 //
 //===----------------------------------------------------------------------===//
 
+#ifdef __AMP_CPU__
+#include <serialize_cpu.h>
+#else
 #pragma once
 
 #include <amp_runtime.h>
@@ -16,6 +19,9 @@ public:
   Serialize(kernel k): k_(k), current_idx_(0) {}
   void Append(size_t sz, const void *s) {
     CLAMP::PushArg(k_, current_idx_++, sz, s);
+  }
+  void AppendPtr(size_t sz, const void *s) {
+    CLAMP::PushArgPtr(k_, current_idx_++, sz, s);
   }
   void* getKernel() { 
     return k_; 
@@ -30,3 +36,4 @@ private:
   int current_idx_;
 };
 }
+#endif

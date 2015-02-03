@@ -60,7 +60,7 @@ $CLAMP_CXXFLAGS =~ s/\s+$//;
 my $CLAMP_LDFLAGS=`$CLAMP_CONFIG --build --ldflags`;
 $CLAMP_LDFLAGS =~ s/^\s+//;
 $CLAMP_LDFLAGS =~ s/\s+$//;
-my $SHARED_CXXFLAGS="$CLAMP_CXXFLAGS -I$AMPTESTINC ";
+my $SHARED_CXXFLAGS="$CLAMP_CXXFLAGS -I$AMPTESTINC -I/usr/include -I$CLANG_AMP_BUILD_DIR/compiler/lib/clang/3.3/include/";
 
 ### Execute tests
 use constant PASS => 0;
@@ -114,9 +114,12 @@ foreach my $def_set (@{$Test::config{'definitions'}})
     if ($Test::config{'compile_only'}) {
         $command = "\\
             $CLANG_AMP -cc1 -fsyntax-only -D__CPU__=1 $SHARED_CXXFLAGS $include_main $test $cflags_defs";
-    } else {
+    } elsif ($ENV{TEST_CPU} eq "ON") {
         $command = "\\
-            $CLANG_AMP $SHARED_CXXFLAGS $include_main $test $AMPTESTLIB $cflags_defs $CLAMP_LDFLAGS -o $tmpdir/test.out -g";
+            $CLANG_AMP -std=c++amp -cpu $SHARED_CXXFLAGS $include_main $test $AMPTESTLIB $cflags_defs $CLAMP_LDFLAGS -o $tmpdir/test.out -g";
+    } else {
+            $command = "\\
+                $CLANG_AMP $SHARED_CXXFLAGS $include_main $test $AMPTESTLIB $cflags_defs $CLAMP_LDFLAGS -o $tmpdir/test.out -g";
     }
 
     log_message("Command: $command\n"
