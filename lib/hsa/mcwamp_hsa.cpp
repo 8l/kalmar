@@ -72,7 +72,6 @@ struct rw_info
 };
 class HSAAMPAllocator : public AMPAllocator
 { 
-  static inline bool is_aligned(const void *pointer, size_t byte_count) { return (uintptr_t)pointer % byte_count == 0; }
 public:
   HSAAMPAllocator() {}
   void init(void *data, int count) {
@@ -244,14 +243,9 @@ extern "C" void *LaunchKernelAsyncImpl(void *ker, size_t nr_dim, size_t *global,
   Concurrency::HSAAMPAllocator& aloc = Concurrency::getHSAAMPAllocator();
   aloc.write();
   dispatch->setLaunchAttributes(nr_dim, global, local);
-  //std::cerr << "Now real launch\n";
-  //kernel->dispatchKernelWaitComplete();
-
-  static std::shared_future<void> fut = dispatch->dispatchKernelAndGetFuture();
-
+  std::shared_future<void>* fut = dispatch->dispatchKernelAndGetFuture();
   // FIXME what about aloc.read() ??
-
-  return static_cast<void*>(&fut);
+  return static_cast<void*>(fut);
 }
 
 extern "C" void MatchKernelNamesImpl(char *fixed_name) {
