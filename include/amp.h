@@ -58,6 +58,9 @@ extern __attribute__((noduplicate)) void barrier(unsigned int n) restrict(amp);
 #endif
 
 namespace Concurrency {
+#if !defined(CXXAMP_ENABLE_HSA)
+extern cl_device_id getAvailableDevice();
+#endif
 typedef int HRESULT;
 class runtime_exception : public std::exception
 {
@@ -165,6 +168,9 @@ public:
 class accelerator {
 public:
   static const wchar_t default_accelerator[];   // = L"default"
+  // gpu accelerator type. In multiple accelerators case, 
+  // we can have device path as L"gpu0", L"gpu1", ...,L"gpuN", where N is the device index
+  // and can be mapped to underlying cl_device_id (OpenCL based)
   static const wchar_t gpu_accelerator[];       // = L"gpu"
   static const wchar_t cpu_accelerator[];       // = L"cpu"
 
@@ -172,7 +178,9 @@ public:
   explicit accelerator(const std::wstring& path);
   accelerator(const accelerator& other);
   static std::vector<accelerator> get_all() {
-    std::vector<accelerator> acc;
+    if (_accs.size())
+      return _accs;
+
 #if !defined(CXXAMP_ENABLE_HSA)
     cl_int err;
     cl_uint platformCount;
@@ -182,18 +190,23 @@ public:
     err = clGetPlatformIDs(0, NULL, &platformCount);
     platforms.reset(new cl_platform_id[platformCount]);
     clGetPlatformIDs(platformCount, platforms.get(), NULL);
+    // Maximum gpu accelerators
+    cl_device_id devices[1024];
     for (int i = 0; i < platformCount; i++) {
         clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_CPU, 0, NULL, &deviceCount);
         for (int j = 0; j < deviceCount; j++)
-            acc.push_back(*_cpu_accelerator);
-        clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_GPU, 0, NULL, &deviceCount);
-        for (int j = 0; j < deviceCount; j++)
-            acc.push_back(*_gpu_accelerator);
+            _accs.push_back(*_cpu_accelerator);
+        clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_GPU, 1024, devices, &deviceCount);
+        for (int j = 0; j < deviceCount; j++) {
+            accelerator gpuacc = accelerator(L"gpu" + std::to_wstring(j));
+            _accs.push_back(gpuacc);
+        }
     }
 #else
-    acc.push_back(*_gpu_accelerator);  // in HSA path, always add GPU accelerator
+    // FIXME: no impl. for HSA in multiple accelerators case
+    _accs.push_back(*_gpu_accelerator);  // in HSA path, always add GPU accelerator
 #endif
-    return acc;
+    return _accs;
   }
   static bool set_default(const std::wstring& path) {
     if (_default_accelerator != nullptr) {
@@ -202,11 +215,31 @@ public:
     if (path == std::wstring(cpu_accelerator)) {
       _default_accelerator = _cpu_accelerator;
       return true;
-    } else if (path == std::wstring(gpu_accelerator)) {
-      _default_accelerator = _gpu_accelerator;
-      return true;
+    } else {
+      for (auto &acc : _accs) {
+        if (path == acc.get_device_path()) {
+          _default_accelerator = std::make_shared<accelerator>(acc);
+          return true;
+        }
+      }
     }
     return false;
+  }
+  
+  // Returns an accelerator_view which when passed as the first argument to a parallel_for_each call
+  // causes the runtime to automatically select the target accelerator_view for executing
+  // the parallel_for_each kernel. 
+  // For all other purposes, the accelerator_view returned by get_auto_selection_view
+  // behaves the same as the default accelerator_view of the default accelerator
+  static accelerator_view get_auto_selection_view() {
+    // TODO: to avoid frequent peer-to-peer copying, can we just reuse array_view's acc?
+#if defined(CXXAMP_ENABLE_HSA)
+    return _gpu_accelerator->get_default_view();
+#else
+    //FIXME: set auto_select flag
+    return accelerator_view(_default_accelerator.get());
+    //return accelerator_view(Concurrency::getAvailableDevice());
+#endif
   }
   accelerator& operator=(const accelerator& other);
 
@@ -216,7 +249,7 @@ public:
   bool get_supports_cpu_shared_memory() const {return supports_cpu_shared_memory; }
   bool get_is_debug() const { return is_debug; }
   bool get_version() const { return version; }
-  accelerator_view& get_default_view() const;
+  accelerator_view get_default_view() const;
   bool get_has_display() const { return has_display; }
   accelerator_view create_view();
   accelerator_view create_view(queuing_mode qmode);
@@ -228,6 +261,12 @@ public:
   access_type get_default_cpu_access_type() const;
   bool operator==(const accelerator& other) const;
   bool operator!=(const accelerator& other) const;
+
+  // CLAMP-specific
+#if !defined(CXXAMP_ENABLE_HSA)
+  cl_device_id get_device_id() const { return _device_id;}
+#endif
+  // END of CLAMP-specific
  private:
   std::wstring device_path;
   unsigned int version; // hiword=major, loword=minor
@@ -240,11 +279,19 @@ public:
   bool supports_cpu_shared_memory;
   size_t dedicated_memory;
   access_type default_access_type;
-  std::shared_ptr<accelerator_view> default_view;
+  accelerator_view default_view;
+  // CLAMP-specific
+#if !defined(CXXAMP_ENABLE_HSA)
+  cl_device_id _device_id;
+  static std::vector<accelerator> _accs;
+#endif
+  // END of CLAMP-specific
 
   // static class members
   static std::shared_ptr<accelerator> _default_accelerator; // initialized as nullptr
+#if defined(CXXAMP_ENABLE_HSA)
   static std::shared_ptr<accelerator> _gpu_accelerator;
+#endif
   static std::shared_ptr<accelerator> _cpu_accelerator;
 };
 
@@ -1352,6 +1399,9 @@ public:
   array() = delete;
 
   explicit array(const Concurrency::extent<N>& ext);
+#if !defined(CXXAMP_ENABLE_HSA)
+  explicit array(const Concurrency::extent<N>& ext, Concurrency::accelerator acc);
+#endif
   explicit array(int e0);
   explicit array(int e0, int e1);
   explicit array(int e0, int e1, int e2);
@@ -2062,7 +2112,21 @@ public:
   extent<N> get_extent() const restrict(amp,cpu) {
     return extent;
   }
-  accelerator_view get_source_accelerator_view() const;
+  // Access the accelerator_view where the data source of the array_view is located.
+  // (1) When the data source of the array_view is native CPU memory, the method returns
+  //       accelerator(accelerator::cpu_accelerator).default_view. 
+  // (2) When the data source underlying the array_view is an array, the method returns
+  //       the accelerator_view where the source array is located.
+  // (3) If the array_view does not have a data source, this API throws a runtime_exception
+  accelerator_view get_source_accelerator_view() const {
+    // TODO: implemenation
+    if (1) {
+    
+    }
+    else {
+      throw runtime_exception("Cannot query source accelerator_view for an array_view without a data source.", 0);
+    }
+  }
 
   __global const T& operator[](const index<N>& idx) const restrict(amp,cpu) {
 #ifndef __GPU__
@@ -2236,43 +2300,13 @@ template <int D0, typename Kernel>
 void parallel_for_each(tiled_extent<D0> compute_domain, const Kernel& f);
 
 template <int N, typename Kernel>
-void parallel_for_each(const accelerator_view& accl_view, extent<N> compute_domain, const Kernel& f){
-/*
-    if (accl_view.get_accelerator() == accelerator(accelerator::cpu_accelerator)) {
-      throw runtime_exception(__errorMsg_UnsupportedAccelerator, E_FAIL);
-    }
-*/
-    parallel_for_each(compute_domain, f);
-}
-
+void parallel_for_each(const accelerator_view& accl_view, extent<N> compute_domain, const Kernel& f);
 template <int D0, int D1, int D2, typename Kernel>
-void parallel_for_each(const accelerator_view& accl_view, tiled_extent<D0,D1,D2> compute_domain, const Kernel& f) {
-/*
-    if (accl_view.get_accelerator() == accelerator(accelerator::cpu_accelerator)) {
-      throw runtime_exception(__errorMsg_UnsupportedAccelerator, E_FAIL);
-    }
-*/
-    parallel_for_each(compute_domain, f);
-}
-
+void parallel_for_each(const accelerator_view& accl_view, tiled_extent<D0,D1,D2> compute_domain, const Kernel& f);
 template <int D0, int D1, typename Kernel>
-void parallel_for_each(const accelerator_view& accl_view, tiled_extent<D0,D1> compute_domain, const Kernel& f) {
-/*
-    if (accl_view.get_accelerator() == accelerator(accelerator::cpu_accelerator)) {
-      throw runtime_exception(__errorMsg_UnsupportedAccelerator, E_FAIL);
-    }
-*/
-    parallel_for_each(compute_domain, f);
-}
-
+void parallel_for_each(const accelerator_view& accl_view, tiled_extent<D0,D1> compute_domain, const Kernel& f);
 template <int D0, typename Kernel>
-void parallel_for_each(const accelerator_view& accl_view, tiled_extent<D0> compute_domain, const Kernel& f) {
-    /*if (accl_view.get_accelerator() == accelerator(accelerator::cpu_accelerator)) {
-      throw runtime_exception(__errorMsg_UnsupportedAccelerator, E_FAIL);
-    }*/
-    parallel_for_each(compute_domain, f);
-}
-
+void parallel_for_each(const accelerator_view& accl_view, tiled_extent<D0> compute_domain, const Kernel& f);
 } // namespace Concurrency
 namespace concurrency = Concurrency;
 // Specialization and inlined implementation of C++AMP classes/templates
@@ -2409,7 +2443,7 @@ void copy(InputIter srcBegin, const array_view<T, 1>& dest) {
         ++srcBegin;
     }
 }
-#if CXXAMP_NV
+#if 0//CXXAMP_NV
 // Extend for data copying from raw pointer
 template <typename T>
 void copy(T* srcBegin, const array_view<T, 1>& dest) {
@@ -2457,7 +2491,7 @@ void copy(const array_view<T, 1> &src, OutputIter destBegin) {
         destBegin++;
     }
 }
-#if CXXAMP_NV
+#if 0//CXXAMP_NV
 // Extend for copying to raw pointer
 template <typename T>
 void copy(const array_view<T, 1> &src, T* destBegin) {

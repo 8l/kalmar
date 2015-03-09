@@ -10,6 +10,7 @@
 #include <future>
 #include <utility>
 #include <amp.h>
+#include <amprt.h>
 
 #if !defined(CXXAMP_ENABLE_HSA)
 #include <cl_manage.h>
@@ -72,7 +73,8 @@ static inline std::future<void> mcw_cxxamp_launch_kernel_async(size_t *ext,
 
 template<typename Kernel, int dim_ext>
 static inline void mcw_cxxamp_launch_kernel(size_t *ext,
-  size_t *local_size, const Kernel& f) restrict(cpu,amp) {
+  size_t *local_size, const Kernel& f,
+  const accelerator_view& accl_view) restrict(cpu,amp) {
 #ifndef __GPU__
 #if defined(CXXAMP_ENABLE_HSA)
   //Invoke Kernel::__cxxamp_trampoline as an HSAkernel
@@ -91,12 +93,13 @@ static inline void mcw_cxxamp_launch_kernel(size_t *ext,
   CLAMP::HSALaunchKernel(kernel, dim_ext, ext, local_size);
 #else
   cl_int err;
-  AMPAllocator& aloc = getAllocator();
-  CLAMP::CompileKernels(aloc.program, aloc.context, aloc.device);
+  // TODO: all captured array_views and arrays shall be located on the same accelerator
+  AMPAllocator* aloc = getAllocator(accl_view.get_accelerator().get_device_id());
+  CLAMP::CompileKernels(aloc->program, aloc->context, aloc->device);
   int* foo = reinterpret_cast<int*>(&Kernel::__cxxamp_trampoline);
   std::string transformed_kernel_name =
       mcw_cxxamp_fixnames(f.__cxxamp_trampoline_name());
-  cl_kernel kernel = CLAMP::GetKernelObject(aloc.program, transformed_kernel_name);
+  cl_kernel kernel = CLAMP::GetKernelObject(aloc->program, transformed_kernel_name);
   Concurrency::Serialize s(kernel);
   f.__cxxamp_serialize(s);
   {
@@ -104,7 +107,7 @@ static inline void mcw_cxxamp_launch_kernel(size_t *ext,
       // The maximum number of tiles per dimension will be no less than 65535.
       // The maximum number of threads in a tile will be no less than 1024.
       // In 3D tiling, the maximal value of D0 will be no less than 64.
-      size_t *maxSizes = Clid2DimSizeMap[aloc.device].maxSizes;
+      size_t *maxSizes = Clid2DimSizeMap[aloc->device].maxSizes;
       bool is = true;
       int threads_per_tile = 1;
       for(int i = 0; local_size && i < dim_ext; i++) {
@@ -124,10 +127,10 @@ static inline void mcw_cxxamp_launch_kernel(size_t *ext,
   }
 
 #if defined(CXXAMP_NV)
-  aloc.write();
+  aloc->write();
 #endif
   cl_event kn_event;
-  cl_command_queue queue = aloc.getQueue();
+  cl_command_queue queue = aloc->getQueue();
   err = clEnqueueNDRangeKernel( queue, kernel, dim_ext, NULL, ext, local_size, 0, NULL, &kn_event);
   assert(err == CL_SUCCESS);
   #if !CXXAMP_SYNC 
@@ -147,7 +150,7 @@ static inline void mcw_cxxamp_launch_kernel(size_t *ext,
   }
   #endif
   #if defined(CXXAMP_NV)
-  aloc.read();
+  aloc->read();
   #endif
 #endif //CXXAMP_ENABLE_HSA
 #endif // __GPU__
@@ -208,7 +211,8 @@ __attribute__((noinline,used)) void parallel_for_each(
         static_cast<size_t>(compute_domain[N - 2]),
         static_cast<size_t>(compute_domain[N - 3])};
     const pfe_wrapper<N, Kernel> _pf(compute_domain, f);
-    mcw_cxxamp_launch_kernel<pfe_wrapper<N, Kernel>, 3>(ext, NULL, _pf);
+    accelerator_view accl_view = accelerator::get_auto_selection_view();
+    mcw_cxxamp_launch_kernel<pfe_wrapper<N, Kernel>, 3>(ext, NULL, _pf, accl_view);
 #else
     auto bar = &pfe_wrapper<N, Kernel>::operator();
     auto qq = &index<N>::__cxxamp_opencl_index;
@@ -261,7 +265,29 @@ __attribute__((noinline,used)) void parallel_for_each(
   if (static_cast<size_t>(compute_domain[0]) > 4294967295L) 
     throw invalid_compute_domain("Extent size too large.");
   size_t ext = compute_domain[0];
-  mcw_cxxamp_launch_kernel<Kernel, 1>(&ext, NULL, f);
+  accelerator_view accl_view = accelerator::get_auto_selection_view();
+  mcw_cxxamp_launch_kernel<Kernel, 1>(&ext, NULL, f, accl_view);
+#else //ifndef __GPU__
+  //to ensure functor has right operator() defined
+  //this triggers the trampoline code being emitted
+  int* foo = reinterpret_cast<int*>(&Kernel::__cxxamp_trampoline);
+#endif
+}
+
+//1D parallel_for_each, nontiled, with accelerator_view
+template <typename Kernel>
+__attribute__((noinline,used)) void parallel_for_each(
+    const accelerator_view& accl_view,
+    extent<1> compute_domain,
+    const Kernel& f) restrict(cpu,amp) {
+#ifndef __GPU__
+  if(compute_domain[0]<=0) {
+    throw invalid_compute_domain("Extent is less or equal than 0.");
+  }
+  if (static_cast<size_t>(compute_domain[0]) > 4294967295L) 
+    throw invalid_compute_domain("Extent size too large.");
+  size_t ext = compute_domain[0];
+  mcw_cxxamp_launch_kernel<Kernel, 1>(&ext, NULL, f, accl_view);
 #else //ifndef __GPU__
   //to ensure functor has right operator() defined
   //this triggers the trampoline code being emitted
@@ -306,7 +332,30 @@ __attribute__((noinline,used)) void parallel_for_each(
     throw invalid_compute_domain("Extent size too large.");
   size_t ext[2] = {static_cast<size_t>(compute_domain[1]),
                    static_cast<size_t>(compute_domain[0])};
-  mcw_cxxamp_launch_kernel<Kernel, 2>(ext, NULL, f);
+  accelerator_view accl_view = accelerator::get_auto_selection_view();
+  mcw_cxxamp_launch_kernel<Kernel, 2>(ext, NULL, f, accl_view);
+#else //ifndef __GPU__
+  //to ensure functor has right operator() defined
+  //this triggers the trampoline code being emitted
+  int* foo = reinterpret_cast<int*>(&Kernel::__cxxamp_trampoline);
+#endif
+}
+
+//2D parallel_for_each, nontiled, with accelerator_view
+template <typename Kernel>
+__attribute__((noinline,used)) void parallel_for_each(
+    const accelerator_view& accl_view,
+    extent<2> compute_domain,
+    const Kernel& f) restrict(cpu,amp) {
+#ifndef __GPU__
+  if(compute_domain[0]<=0 || compute_domain[1]<=0) {
+    throw invalid_compute_domain("Extent is less or equal than 0.");
+  }
+  if (static_cast<size_t>(compute_domain[0]) * static_cast<size_t>(compute_domain[1]) > 4294967295L)
+    throw invalid_compute_domain("Extent size too large.");
+  size_t ext[2] = {static_cast<size_t>(compute_domain[1]),
+                   static_cast<size_t>(compute_domain[0])};
+  mcw_cxxamp_launch_kernel<Kernel, 2>(ext, NULL, f, accl_view);
 #else //ifndef __GPU__
   //to ensure functor has right operator() defined
   //this triggers the trampoline code being emitted
@@ -359,7 +408,37 @@ __attribute__((noinline,used)) void parallel_for_each(
   size_t ext[3] = {static_cast<size_t>(compute_domain[2]),
                    static_cast<size_t>(compute_domain[1]),
                    static_cast<size_t>(compute_domain[0])};
-  mcw_cxxamp_launch_kernel<Kernel, 3>(ext, NULL, f);
+  accelerator_view accl_view = accelerator::get_auto_selection_view();
+  mcw_cxxamp_launch_kernel<Kernel, 3>(ext, NULL, f, accl_view);
+#else //ifndef __GPU__
+  //to ensure functor has right operator() defined
+  //this triggers the trampoline code being emitted
+  int* foo = reinterpret_cast<int*>(&Kernel::__cxxamp_trampoline);
+#endif
+}
+
+//3D parallel_for_each, nontiled, with accelerator_view
+template <typename Kernel>
+__attribute__((noinline,used)) void parallel_for_each(
+    const accelerator_view& accl_view,
+    extent<3> compute_domain,
+    const Kernel& f) restrict(cpu,amp) {
+#ifndef __GPU__
+  if(compute_domain[0]<=0 || compute_domain[1]<=0 || compute_domain[2]<=0) {
+    throw invalid_compute_domain("Extent is less or equal than 0.");
+  }
+  if (static_cast<size_t>(compute_domain[0]) * static_cast<size_t>(compute_domain[1]) > 4294967295L)
+    throw invalid_compute_domain("Extent size too large.");
+  if (static_cast<size_t>(compute_domain[1]) * static_cast<size_t>(compute_domain[2]) > 4294967295L)
+    throw invalid_compute_domain("Extent size too large.");
+  if (static_cast<size_t>(compute_domain[0]) * static_cast<size_t>(compute_domain[2]) > 4294967295L)
+    throw invalid_compute_domain("Extent size too large.");
+  if (static_cast<size_t>(compute_domain[0]) * static_cast<size_t>(compute_domain[1]) * static_cast<size_t>(compute_domain[2]) > 4294967295L)
+    throw invalid_compute_domain("Extent size too large.");
+  size_t ext[3] = {static_cast<size_t>(compute_domain[2]),
+                   static_cast<size_t>(compute_domain[1]),
+                   static_cast<size_t>(compute_domain[0])};
+  mcw_cxxamp_launch_kernel<Kernel, 3>(ext, NULL, f, accl_view);
 #else //ifndef __GPU__
   //to ensure functor has right operator() defined
   //this triggers the trampoline code being emitted
@@ -415,7 +494,34 @@ __attribute__((noinline,used)) void parallel_for_each(
   if(ext % tile != 0) {
     throw invalid_compute_domain("Extent can't be evenly divisble by tile size.");
   }
-  mcw_cxxamp_launch_kernel<Kernel, 1>(&ext, &tile, f);
+  accelerator_view accl_view = accelerator::get_auto_selection_view();
+  mcw_cxxamp_launch_kernel<Kernel, 1>(&ext, &tile, f, accl_view);
+#else //ifndef __GPU__
+  tiled_index<D0> this_is_used_to_instantiate_the_right_index;
+  //to ensure functor has right operator() defined
+  //this triggers the trampoline code being emitted
+  int* foo = reinterpret_cast<int*>(&Kernel::__cxxamp_trampoline);
+#endif
+}
+//1D parallel_for_each, tiled, with accelerator_view
+template <int D0, typename Kernel>
+__attribute__((noinline,used)) void parallel_for_each(
+    const accelerator_view& accl_view,
+    tiled_extent<D0> compute_domain,
+    const Kernel& f) restrict(cpu,amp) {
+#ifndef __GPU__
+  if(compute_domain[0]<=0) {
+    throw invalid_compute_domain("Extent is less or equal than 0.");
+  }
+  if (static_cast<size_t>(compute_domain[0]) > 4294967295L) 
+    throw invalid_compute_domain("Extent size too large.");
+  size_t ext = compute_domain[0];
+  size_t tile = compute_domain.tile_dim0;
+  static_assert( compute_domain.tile_dim0 <= 1024, "The maximum nuimber of threads in a tile is 1024");
+  if(ext % tile != 0) {
+    throw invalid_compute_domain("Extent can't be evenly divisble by tile size.");
+  }
+  mcw_cxxamp_launch_kernel<Kernel, 1>(&ext, &tile, f, accl_view);
 #else //ifndef __GPU__
   tiled_index<D0> this_is_used_to_instantiate_the_right_index;
   //to ensure functor has right operator() defined
@@ -472,7 +578,8 @@ __attribute__((noinline,used)) void parallel_for_each(
   if((ext[0] % tile[0] != 0) || (ext[1] % tile[1] != 0)) {
     throw invalid_compute_domain("Extent can't be evenly divisble by tile size.");
   }
-  mcw_cxxamp_launch_kernel<Kernel, 2>(ext, tile, f);
+  accelerator_view accl_view = accelerator::get_auto_selection_view();
+  mcw_cxxamp_launch_kernel<Kernel, 2>(ext, tile, f, accl_view);
 #else //ifndef __GPU__
   tiled_index<D0, D1> this_is_used_to_instantiate_the_right_index;
   //to ensure functor has right operator() defined
@@ -480,7 +587,36 @@ __attribute__((noinline,used)) void parallel_for_each(
   int* foo = reinterpret_cast<int*>(&Kernel::__cxxamp_trampoline);
 #endif
 }
- 
+
+//2D parallel_for_each, tiled, with accelerator_view
+template <int D0, int D1, typename Kernel>
+__attribute__((noinline,used)) void parallel_for_each(
+    const accelerator_view& accl_view,
+    tiled_extent<D0, D1> compute_domain,
+    const Kernel& f) restrict(cpu,amp) {
+#ifndef __GPU__
+  if(compute_domain[0]<=0 || compute_domain[1]<=0) {
+    throw invalid_compute_domain("Extent is less or equal than 0.");
+  }
+  if (static_cast<size_t>(compute_domain[0]) * static_cast<size_t>(compute_domain[1]) > 4294967295L)
+    throw invalid_compute_domain("Extent size too large.");
+  size_t ext[2] = { static_cast<size_t>(compute_domain[1]),
+                    static_cast<size_t>(compute_domain[0])};
+  size_t tile[2] = { compute_domain.tile_dim1,
+                     compute_domain.tile_dim0};
+  static_assert( (compute_domain.tile_dim1 * compute_domain.tile_dim0)<= 1024, "The maximum nuimber of threads in a tile is 1024");
+  if((ext[0] % tile[0] != 0) || (ext[1] % tile[1] != 0)) {
+    throw invalid_compute_domain("Extent can't be evenly divisble by tile size.");
+  }
+  mcw_cxxamp_launch_kernel<Kernel, 2>(ext, tile, f, accl_view);
+#else //ifndef __GPU__
+  tiled_index<D0, D1> this_is_used_to_instantiate_the_right_index;
+  //to ensure functor has right operator() defined
+  //this triggers the trampoline code being emitted
+  int* foo = reinterpret_cast<int*>(&Kernel::__cxxamp_trampoline);
+#endif
+}
+
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wreturn-type"
 //2D async_parallel_for_each, tiled
@@ -539,7 +675,45 @@ __attribute__((noinline,used)) void parallel_for_each(
   if((ext[0] % tile[0] != 0) || (ext[1] % tile[1] != 0) || (ext[2] % tile[2] != 0)) {
     throw invalid_compute_domain("Extent can't be evenly divisble by tile size.");
   }
-  mcw_cxxamp_launch_kernel<Kernel, 3>(ext, tile, f);
+  accelerator_view accl_view = accelerator::get_auto_selection_view();
+  mcw_cxxamp_launch_kernel<Kernel, 3>(ext, tile, f, accl_view);
+#else //ifndef __GPU__
+  tiled_index<D0, D1, D2> this_is_used_to_instantiate_the_right_index;
+  //to ensure functor has right operator() defined
+  //this triggers the trampoline code being emitted
+  int* foo = reinterpret_cast<int*>(&Kernel::__cxxamp_trampoline);
+#endif
+}
+
+//3D parallel_for_each, tiled, with accelerator_view
+template <int D0, int D1, int D2, typename Kernel>
+__attribute__((noinline,used)) void parallel_for_each(
+    const accelerator_view& accl_view,
+    tiled_extent<D0, D1, D2> compute_domain,
+    const Kernel& f) restrict(cpu,amp) {
+#ifndef __GPU__
+  if(compute_domain[0]<=0 || compute_domain[1]<=0 || compute_domain[2]<=0) {
+    throw invalid_compute_domain("Extent is less or equal than 0.");
+  }
+  if (static_cast<size_t>(compute_domain[0]) * static_cast<size_t>(compute_domain[1]) > 4294967295L)
+    throw invalid_compute_domain("Extent size too large.");
+  if (static_cast<size_t>(compute_domain[1]) * static_cast<size_t>(compute_domain[2]) > 4294967295L)
+    throw invalid_compute_domain("Extent size too large.");
+  if (static_cast<size_t>(compute_domain[0]) * static_cast<size_t>(compute_domain[2]) > 4294967295L)
+    throw invalid_compute_domain("Extent size too large.");
+  if (static_cast<size_t>(compute_domain[0]) * static_cast<size_t>(compute_domain[1]) * static_cast<size_t>(compute_domain[2]) > 4294967295L)
+    throw invalid_compute_domain("Extent size too large.");
+  size_t ext[3] = { static_cast<size_t>(compute_domain[2]),
+                    static_cast<size_t>(compute_domain[1]),
+                    static_cast<size_t>(compute_domain[0])};
+  size_t tile[3] = { compute_domain.tile_dim2,
+                     compute_domain.tile_dim1,
+                     compute_domain.tile_dim0};
+  static_assert(( compute_domain.tile_dim2 * compute_domain.tile_dim1* compute_domain.tile_dim0)<= 1024, "The maximum nuimber of threads in a tile is 1024");
+  if((ext[0] % tile[0] != 0) || (ext[1] % tile[1] != 0) || (ext[2] % tile[2] != 0)) {
+    throw invalid_compute_domain("Extent can't be evenly divisble by tile size.");
+  }
+  mcw_cxxamp_launch_kernel<Kernel, 3>(ext, tile, f, accl_view);
 #else //ifndef __GPU__
   tiled_index<D0, D1, D2> this_is_used_to_instantiate_the_right_index;
   //to ensure functor has right operator() defined

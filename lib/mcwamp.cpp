@@ -8,6 +8,7 @@
 #include <amp.h>
 #include <map>
 #include <CL/opencl.h>
+#include <amprt.h>
 
 #include <md5.h>
 #include <sstream>
@@ -20,17 +21,26 @@ namespace Concurrency {
 const wchar_t accelerator::gpu_accelerator[] = L"gpu";
 const wchar_t accelerator::cpu_accelerator[] = L"cpu";
 const wchar_t accelerator::default_accelerator[] = L"default";
-
+#if defined(CXXAMP_ENABLE_HSA)
 std::shared_ptr<accelerator> accelerator::_gpu_accelerator = std::make_shared<accelerator>(accelerator::gpu_accelerator);
+#endif
 std::shared_ptr<accelerator> accelerator::_cpu_accelerator = std::make_shared<accelerator>(accelerator::cpu_accelerator);
-std::shared_ptr<accelerator> accelerator::_default_accelerator = nullptr;
+std::shared_ptr<accelerator> accelerator::_default_accelerator = std::make_shared<accelerator>(L"gpu0");
 
+std::vector<accelerator> accelerator::_accs;
+cl_device_id details::DeviceManager::starting_id = NULL;
 std::map<cl_device_id, struct DimMaxSize> Clid2DimSizeMap;
-AMPAllocator& getAllocator()
+// Simply extend it to multiple accelerators
+static details::DeviceManager DeviceMgr;
+AMPAllocator* getAllocator(cl_device_id id)
 {
-    static AMPAllocator amp;
-    return amp;
+  return DeviceMgr.getAllocator(id);
 }
+cl_device_id getAvailableDevice()
+{
+  return DeviceMgr.getAvailableDevice();
+}
+
 
 std::map<cl_kernel, std::vector<cl_event> > kernelEventMap;
 //int mm_info::waitOnKernelsCount = 0;

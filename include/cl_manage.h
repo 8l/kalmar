@@ -54,25 +54,9 @@ struct AMPAllocator
         return ret;
     }
 
-    AMPAllocator() {
-        cl_uint          num_platforms;
-        cl_int           err;
-        cl_platform_id   platform_id[10];
+    AMPAllocator(cl_device_id a_device) : device(a_device){
         int i;
-        err = clGetPlatformIDs(10, platform_id, &num_platforms);
-        for (i = 0; i < num_platforms; i++) {
-            err = clGetDeviceIDs(platform_id[i], CL_DEVICE_TYPE_GPU, 1, &device, NULL);
-            if (err == CL_SUCCESS)
-                break;
-        }
-        if (err != CL_SUCCESS) {
-            for (i = 0; i < num_platforms; i++) {
-                err = clGetDeviceIDs(platform_id[i], CL_DEVICE_TYPE_CPU, 1, &device, NULL);
-                if (err == CL_SUCCESS)
-                    break;
-            }
-        }
-        assert(err == CL_SUCCESS);
+        cl_int           err;
         context = clCreateContext(0, 1, &device, NULL, NULL, &err);
         assert(err == CL_SUCCESS);
         for (i = 0; i < QUEUE_SIZE; ++i) {
@@ -271,7 +255,7 @@ struct AMPAllocator
 #endif
 };
 
-AMPAllocator& getAllocator();
+AMPAllocator* getAllocator(cl_device_id id);
 
 struct mm_info
 {
@@ -280,14 +264,23 @@ struct mm_info
     bool discard;
     bool sync;
     bool free;
+    cl_device_id _device_id;
     //static int waitOnKernelsCount;
-    mm_info(int count)
-      : data(aligned_alloc(0x1000, count)), discard(false), free(true) { getAllocator().init(data, count); }
-    mm_info(int count, void *src)
-      : data(src), discard(false), free(false) { getAllocator().init(data, count); }
+    mm_info(int count, cl_device_id device_id)
+      : data(aligned_alloc(0x1000, count)), discard(false), free(true) {
+      assert(device_id);
+      _device_id = device_id;
+      getAllocator(_device_id)->init(data, count);
+    }
+    mm_info(int count, void *src, cl_device_id device_id)
+      : data(src), discard(false), free(false) {
+      assert(device_id);
+      _device_id = device_id;
+      getAllocator(_device_id)->init(data, count);
+    }
     void synchronize() {
       #if CXXAMP_NV
-      std::map<void *, rw_info> &rwq = getAllocator().synchronize();
+      std::map<void *, rw_info> &rwq = getAllocator(_device_id)->synchronize();
       {
         cl_int err;
         for (auto& it : rwq) {
@@ -300,7 +293,7 @@ struct mm_info
             #ifdef SYNC_DEBUG
             printf("sync read back to host=%p, device=%p, count=%d\n\n",data, rw.dm, rw.count);
             #endif
-            err = clEnqueueReadBuffer(getAllocator().getQueue(), rw.dm, CL_TRUE, 0,
+            err = clEnqueueReadBuffer(getAllocator(_device_id)->getQueue(), rw.dm, CL_TRUE, 0,
                                       rw.count, data, 0, NULL, NULL);
             assert(err == CL_SUCCESS);
             rw.used = false;
@@ -317,7 +310,7 @@ struct mm_info
     void disc() {
       discard = true;
       #if CXXAMP_NV
-      getAllocator().discard(data);
+      getAllocator(_device_id)->discard(data);
       #endif
     }
     void serialize(Serialize& s) {
@@ -327,14 +320,14 @@ struct mm_info
       #if !CXXAMP_SYNC
       serializedKernel.push_back(s.getKernel());
       #endif
-      getAllocator().append(s, data);
+      getAllocator(_device_id)->append(s, data);
     }
     ~mm_info() {
         //printf("mm_info::~mm_info() : %d\n", ++waitOnKernelsCount);
       waitOnKernels();
       if (!discard)
         synchronize();
-      getAllocator().free(data);
+      getAllocator(_device_id)->free(data);
       //free = true;
       if (0) {
         ::operator delete(data);
@@ -383,10 +376,10 @@ class _data_host {
     std::shared_ptr<mm_info> mm;
     template <typename U> friend class _data_host;
 public:
-    _data_host(int count)
-        : mm(std::make_shared<mm_info>(count * sizeof(T))) {}
-    _data_host(int count, T* src)
-        : mm(std::make_shared<mm_info>(count * sizeof(T), src)) {}
+    _data_host(int count, cl_device_id device_id)
+        : mm(std::make_shared<mm_info>(count * sizeof(T), device_id)) {}
+    _data_host(int count, T* src, cl_device_id device_id)
+        : mm(std::make_shared<mm_info>(count * sizeof(T), src, device_id)) {}
     _data_host(const _data_host& other)
         : mm(other.mm) {}
     template <typename U>
