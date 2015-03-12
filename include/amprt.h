@@ -42,9 +42,9 @@ struct AtomCopyable
   AtomCopyable &operator=(const AtomCopyable &other) {
     _impl.store(other._impl.load());
   }
-  // TODO: fix compilation errors
-  T fetch_add() { return 2;/*_impl.fetch_add(1);*/ };
-  T fetch_sub() { return 1;/*_impl.fetch_sub(1); */};
+  // llvm.org/viewvc/llvm-project?view=revision&revision=183033
+  T fetch_add() { return _impl.fetch_add(1); };
+  T fetch_sub() { return _impl.fetch_sub(1); };
   std::atomic<T> &get() { return _impl; }
 };
 
