@@ -1018,6 +1018,10 @@ class tiled_index {
   friend void parallel_for_each(tiled_extent<D0_, D1_, D2_>, const K&);
 
   template<int D0_, int D1_, int D2_, typename K>
+  friend void parallel_for_each(const accelerator_view& accl_view,
+                                tiled_extent<D0_, D1_, D2_>, const K&);
+
+  template<int D0_, int D1_, int D2_, typename K>
   friend completion_future async_parallel_for_each(tiled_extent<D0_, D1_, D2_>, const K&);
 };
 template <int N> class extent;
@@ -1054,6 +1058,9 @@ class tiled_index<D0, 0, 0> {
   {}
   template<int D, typename K>
   friend void parallel_for_each(tiled_extent<D>, const K&);
+
+  template<int D, typename K>
+  friend void parallel_for_each(const accelerator_view& accl_view, tiled_extent<D>, const K&);
 
   template<int D, typename K>
   friend completion_future async_parallel_for_each(tiled_extent<D>, const K&);
@@ -1094,6 +1101,9 @@ class tiled_index<D0, D1, 0> {
   {}
   template<int D0_, int D1_, typename K>
   friend void parallel_for_each(tiled_extent<D0_, D1_>, const K&);
+  
+  template<int D0_, int D1_, typename K>
+  friend void parallel_for_each(const accelerator_view& accl_view, tiled_extent<D0_, D1_>, const K&);
 
   template<int D0_, int D1_, typename K>
   friend completion_future async_parallel_for_each(tiled_extent<D0_, D1_>, const K&);
