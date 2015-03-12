@@ -358,7 +358,7 @@ template <typename T>
 class _data {
 public:
     _data() = delete;
-    _data(int count) {}
+    _data(int count, cl_device_id device_id) {}
     _data(const _data& d) restrict(cpu, amp)
         : p_(d.p_) {}
     template <typename U>
