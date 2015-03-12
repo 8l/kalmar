@@ -54,7 +54,7 @@ struct AMPAllocator
         return ret;
     }
 
-    AMPAllocator(cl_device_id a_device) : device(a_device){
+    AMPAllocator(cl_device_id a_device) : device(a_device), program (NULL) {
         int i;
         cl_int           err;
         context = clCreateContext(0, 1, &device, NULL, NULL, &err);
@@ -233,7 +233,8 @@ struct AMPAllocator
       }
     }
     ~AMPAllocator() {
-        clReleaseProgram(program);
+        if (program)
+          clReleaseProgram(program);
         for (int i = 0; i < QUEUE_SIZE; ++i) {
           clReleaseCommandQueue(queue[i]);
         }
