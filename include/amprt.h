@@ -29,13 +29,16 @@
 
 namespace Concurrency
 {
+namespace CLAMP {
+extern void ReleaseKernelObject();
+}
 namespace details
 {
 // GPU device management
 class DeviceManager
 {
 public:
-  DeviceManager() {
+  DeviceManager() : program (NULL) {
     cl_uint num_platforms;
     starting_id = NULL;
     cl_int err;
@@ -55,8 +58,9 @@ public:
         for (int j = 0; j < num_devices; j++) {
           if (!starting_id) starting_id = devices[j];
           gpuCount++;
+          std::wstring path = L"gpu" + std::to_wstring(j);
           m_allocators.insert(std::pair<cl_device_id, AMPAllocator*>(
-                           devices[j], new Concurrency::AMPAllocator(devices[j])));
+                           devices[j], new Concurrency::AMPAllocator(devices[j], path)));
           m_ids.insert(std::pair<int, cl_device_id>(j, devices[j]));
         }
       }
@@ -67,9 +71,12 @@ public:
   }
 
   ~DeviceManager() {
+    CLAMP::ReleaseKernelObject();
     for (auto& it : m_allocators) {
       delete it.second;
     }
+    if(program)
+     clReleaseProgram(program);
   }
   // Get device count
   int getCount() const {return m_count;}
@@ -114,7 +121,8 @@ private:
   std::map<int, cl_device_id> m_ids;
 
 public:
-  static cl_device_id starting_id;
+  static cl_device_id starting_id; // the very first GPU device
+  cl_program program;
 };
 }; // namespace details
 }; // namespace Concurrency::details

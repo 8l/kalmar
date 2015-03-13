@@ -109,7 +109,7 @@ inline accelerator::accelerator(const std::wstring& path) :
           continue;
         _device_id = devices[shipped_id];
         supports_cpu_shared_memory = false;
-        default_view.is_auto_selection = true;
+        default_view.is_auto_selection = false;
         break;
       }
     }

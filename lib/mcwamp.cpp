@@ -36,9 +36,14 @@ AMPAllocator* getAllocator(cl_device_id id)
 {
   return DeviceMgr.getAllocator(id);
 }
-cl_device_id getAvailableDevice()
+cl_program& getCLProgram() {
+  return DeviceMgr.program;
+}
+accelerator* getAvailableAccelerator()
 {
-  return DeviceMgr.getAvailableDevice();
+  AMPAllocator* amp = DeviceMgr.getAllocator(DeviceMgr.getAvailableDevice());
+  assert(amp);
+  return amp->get_accelerator();
 }
 
 
@@ -224,6 +229,8 @@ cl_kernel GetKernelObject(cl_program& prog, std::string& name) {
   return KO[name];
 }
 void ReleaseKernelObject() {
+  // FIXME: memory leak
+  return;
   for(const auto& it : Pro2KernelObject)
     for(const auto& itt : it.second) 
       if(itt.second)

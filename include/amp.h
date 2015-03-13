@@ -58,9 +58,6 @@ extern __attribute__((noduplicate)) void barrier(unsigned int n) restrict(amp);
 #endif
 
 namespace Concurrency {
-#if !defined(CXXAMP_ENABLE_HSA)
-extern cl_device_id getAvailableDevice();
-#endif
 typedef int HRESULT;
 class runtime_exception : public std::exception
 {
@@ -125,7 +122,7 @@ class completion_future;
 class accelerator;
 template <typename T, int N> class array_view;
 template <typename T, int N> class array;
-
+extern accelerator* getAvailableAccelerator();
 class accelerator_view {
 public:
   accelerator_view() = delete;
@@ -237,8 +234,7 @@ public:
     return _gpu_accelerator->get_default_view();
 #else
     //FIXME: set auto_select flag
-    return accelerator_view(_default_accelerator.get());
-    //return accelerator_view(Concurrency::getAvailableDevice());
+    return accelerator_view(Concurrency::getAvailableAccelerator());
 #endif
   }
   accelerator& operator=(const accelerator& other);

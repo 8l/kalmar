@@ -39,7 +39,6 @@ struct DimMaxSize {
 };
 extern std::map<cl_device_id, struct DimMaxSize> Clid2DimSizeMap;
 namespace CLAMP {
-extern void ReleaseKernelObject();
 extern void AddKernelEventObject(cl_kernel, cl_event);
 extern std::vector<cl_event>& GetKernelEventObject(cl_kernel);
 extern void RemoveKernelEventObject(cl_kernel);
@@ -69,8 +68,8 @@ struct AMPAllocator
         return ret;
     }
 
-    AMPAllocator(cl_device_id a_device)
-      : device(a_device), program (NULL), m_maxCommandQueuePerDevice(QUEUE_SIZE) {
+    AMPAllocator(cl_device_id a_device, std::wstring a_device_path)
+      : device(a_device), m_maxCommandQueuePerDevice(QUEUE_SIZE) {
         int i;
         cl_int           err;
         context = clCreateContext(0, 1, &device, NULL, NULL, &err);
@@ -151,6 +150,7 @@ struct AMPAllocator
       Clid2DimSizeMap[device] = d;
 
       resetLock();
+      _accelerator = accelerator(a_device_path);
     }
     void init(void *data, int count) {
         auto iter = mem_info.find(data);
@@ -251,8 +251,6 @@ struct AMPAllocator
       }
     }
     ~AMPAllocator() {
-        if (program)
-          clReleaseProgram(program);
         for (int i = 0; i < QUEUE_SIZE; ++i) {
           clReleaseCommandQueue(queue[i]);
         }
@@ -260,8 +258,6 @@ struct AMPAllocator
         for(const auto& it : Clid2DimSizeMap)
           if(it.second.maxSizes)
             delete[] it.second.maxSizes;
-        // Release all kernel objects associated with 'program'
-        CLAMP::ReleaseKernelObject();
     }
     bool tryLock() {
       int leftover = m_atomicLock.fetch_add();
@@ -275,27 +271,30 @@ struct AMPAllocator
     void releaseLock()
     {
       int leftover = m_atomicLock.fetch_sub();
-      assert(leftover >= 1);
+      assert(leftover >= 0);
     };
     void resetLock()
     {
       (m_atomicLock.get()).store(0); 
     };
-
+    Concurrency::accelerator* get_accelerator() {
+      return &_accelerator;
+    }
     std::map<void *, amp_obj> mem_info;
     cl_context       context;
     cl_device_id     device;
     cl_command_queue queue[QUEUE_SIZE];
     int              queue_id;
-    cl_program       program;
 #if defined(CXXAMP_NV)
     std::map<void *, rw_info> rwq;
 #endif
     AtomCopyable<int> m_atomicLock;
     int m_maxCommandQueuePerDevice;
+    Concurrency::accelerator _accelerator;
 };
 
 AMPAllocator* getAllocator(cl_device_id id);
+cl_program& getCLProgram();
 
 struct mm_info
 {
