@@ -392,7 +392,8 @@ template<typename T, int N> array<T, N>::array(const Concurrency::extent<N>& ext
 #if defined(CXXAMP_ENABLE_HSA)
   m_device(ext.size()),
 #else
-  m_device(ext.size(), acc.get_device_id()),
+  m_device(ext.size(), (acc == accelerator(accelerator::cpu_accelerator))? 
+   Concurrency::details::DeviceManager::starting_device(): acc.get_device_id()),
 #endif
   pav(nullptr), paav(nullptr)
 {
