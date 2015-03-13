@@ -732,7 +732,13 @@ completion_future array_view<const T, N>::synchronize_async() const {
 template <typename T, int N>
 array_view<const T, N>::array_view(const Concurrency::extent<N>& ext,
                              value_type* src) restrict(amp,cpu)
-    : extent(ext), extent_base(ext), cache(ext.size(), const_cast<nc_T*>(src)), offset(0) {}
+    : extent(ext), extent_base(ext),
+#if defined(CXXAMP_ENABLE_HSA)
+    cache(ext.size(), const_cast<nc_T*>(src)),
+#else
+    cache(ext.size(), const_cast<nc_T*>(src), Concurrency::details::DeviceManager::starting_device()),
+#endif
+     offset(0) {}
 
 template <typename T, int N>
 void array_view<const T, N>::refresh() const {
