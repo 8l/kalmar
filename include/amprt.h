@@ -31,23 +31,6 @@ namespace Concurrency
 {
 namespace details
 {
-// wrapper for std::atom to enable copy assign
-template <typename T>
-struct AtomCopyable
-{
-  std::atomic<T> _impl;
-  AtomCopyable() :_impl() {}
-  AtomCopyable(const std::atomic<T> &other) :_impl(other.load()) {}
-  AtomCopyable(const AtomCopyable &other) :_impl(other._impl.load()) {}
-  AtomCopyable &operator=(const AtomCopyable &other) {
-    _impl.store(other._impl.load());
-  }
-  // llvm.org/viewvc/llvm-project?view=revision&revision=183033
-  T fetch_add() { return _impl.fetch_add(1); };
-  T fetch_sub() { return _impl.fetch_sub(1); };
-  std::atomic<T> &get() { return _impl; }
-};
-
 // GPU device management
 class DeviceManager
 {
@@ -81,12 +64,6 @@ public:
     assert(gpuCount > 0);
 
     m_count = gpuCount;
-    m_atomicLock.resize(gpuCount);
-    m_maxCommandQueuePerDevice.resize(gpuCount);
-    for (int i = 0; i < gpuCount; i++) {
-      resetLock(i);
-      m_maxCommandQueuePerDevice[i] = 2;
-    }
   }
 
   ~DeviceManager() {
@@ -110,65 +87,31 @@ public:
     }
   }
 
-  bool tryLock(int deviceIndex)
-  {
-    assert(deviceIndex >= 0);
-    int leftover = m_atomicLock[deviceIndex].fetch_add();
-    if (leftover < m_maxCommandQueuePerDevice[deviceIndex]) {
-      return true;
-    } else {
-      m_atomicLock[deviceIndex].fetch_sub();
-      return false;
-    }
-  }
-
-  void releaseLock(int deviceIndex) 
-  {
-    int leftover = m_atomicLock[deviceIndex].fetch_sub();
-    assert(leftover >= 1);
-  };
-
-  void resetLock(int deviceIndex) 
-  {
-    (m_atomicLock[deviceIndex].get()).store(0); 
-  };
-
   // TODO: shall returned pre-created accelerators
   cl_device_id getAvailableDevice()
   {
-    int device_index = -1;
-    // Poll to see if any device is available.
-    for (unsigned i=0; i < getCount(); i++) {
-      bool avail = tryLock(i);
-      if (avail) {
-        device_index = i;
-        break;
-      }
-    }
-    if (device_index == -1) {
-      // Blocking: if none is available at this moment, spin until we get one
-      bool avail = false;
-      do {
-        for (unsigned i=0; i < getCount(); i++) {
-          avail = tryLock(i);
-          if (avail) {
-            device_index = i;
-            break;
-          }
+    cl_device_id did = NULL;
+    // Blocking: if none is available at this moment, spin until we get one
+    bool avail = false;
+    do {
+      for (auto &it: m_allocators) {
+        avail = it.second->tryLock();
+        if (avail) {
+          did = it.first;
+          break;
         }
-      } while(!avail);
-    }
-    assert (device_index != -1);
+      }
+    } while(!avail);
+    
+    assert (did != NULL);
 
-    return m_ids[device_index];
+    return did;
   }
 
 private:
   int m_count;
   std::map<cl_device_id, AMPAllocator*> m_allocators;
   std::map<int, cl_device_id> m_ids;
-  std::vector< AtomCopyable<int> > m_atomicLock;
-  std::vector<int> m_maxCommandQueuePerDevice;
 
 public:
   static cl_device_id starting_id;

@@ -44,6 +44,21 @@ extern void AddKernelEventObject(cl_kernel, cl_event);
 extern std::vector<cl_event>& GetKernelEventObject(cl_kernel);
 extern void RemoveKernelEventObject(cl_kernel);
 }
+template <typename T>
+struct AtomCopyable
+{
+  std::atomic<T> _impl;
+  AtomCopyable() :_impl() {}
+  AtomCopyable(const std::atomic<T> &other) :_impl(other.load()) {}
+  AtomCopyable(const AtomCopyable &other) :_impl(other._impl.load()) {}
+  AtomCopyable &operator=(const AtomCopyable &other) {
+    _impl.store(other._impl.load());
+  }
+  // llvm.org/viewvc/llvm-project?view=revision&revision=183033
+  T fetch_add() { return _impl.fetch_add(1); };
+  T fetch_sub() { return _impl.fetch_sub(1); };
+  std::atomic<T> &get() { return _impl; }
+};
 
 struct AMPAllocator
 {
@@ -54,7 +69,8 @@ struct AMPAllocator
         return ret;
     }
 
-    AMPAllocator(cl_device_id a_device) : device(a_device), program (NULL) {
+    AMPAllocator(cl_device_id a_device)
+      : device(a_device), program (NULL), m_maxCommandQueuePerDevice(QUEUE_SIZE) {
         int i;
         cl_int           err;
         context = clCreateContext(0, 1, &device, NULL, NULL, &err);
@@ -133,6 +149,8 @@ struct AMPAllocator
       d.dimensions = dimensions;
       d.maxSizes = maxSizes;
       Clid2DimSizeMap[device] = d;
+
+      resetLock();
     }
     void init(void *data, int count) {
         auto iter = mem_info.find(data);
@@ -245,6 +263,25 @@ struct AMPAllocator
         // Release all kernel objects associated with 'program'
         CLAMP::ReleaseKernelObject();
     }
+    bool tryLock() {
+      int leftover = m_atomicLock.fetch_add();
+      if (leftover < m_maxCommandQueuePerDevice) {
+        return true;
+      } else {
+        m_atomicLock.fetch_sub();
+        return false;
+      }
+    }
+    void releaseLock()
+    {
+      int leftover = m_atomicLock.fetch_sub();
+      assert(leftover >= 1);
+    };
+    void resetLock()
+    {
+      (m_atomicLock.get()).store(0); 
+    };
+
     std::map<void *, amp_obj> mem_info;
     cl_context       context;
     cl_device_id     device;
@@ -254,6 +291,8 @@ struct AMPAllocator
 #if defined(CXXAMP_NV)
     std::map<void *, rw_info> rwq;
 #endif
+    AtomCopyable<int> m_atomicLock;
+    int m_maxCommandQueuePerDevice;
 };
 
 AMPAllocator* getAllocator(cl_device_id id);
