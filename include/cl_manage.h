@@ -31,7 +31,7 @@ struct amp_obj
     int count;
 };
 
-#define QUEUE_SIZE (2)
+#define QUEUE_SIZE (1)
 
 struct DimMaxSize {
   cl_uint dimensions;
@@ -260,7 +260,7 @@ struct AMPAllocator
     }
     bool tryLock() {
       int old_val = m_atomicLock.fetch_add();
-      if ((old_val+1) < m_maxCommandQueuePerDevice) {
+      if ((old_val+1) <= m_maxCommandQueuePerDevice) {
         return true;
       } else {
         m_atomicLock.fetch_sub();
