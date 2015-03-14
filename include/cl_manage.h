@@ -69,7 +69,7 @@ struct AMPAllocator
     }
 
     AMPAllocator(cl_device_id a_device, std::wstring a_device_path)
-      : device(a_device), m_maxCommandQueuePerDevice(QUEUE_SIZE) {
+      : device(a_device), program(NULL), m_maxCommandQueuePerDevice(QUEUE_SIZE) {
         int i;
         cl_int           err;
         context = clCreateContext(0, 1, &device, NULL, NULL, &err);
@@ -251,17 +251,16 @@ struct AMPAllocator
       }
     }
     ~AMPAllocator() {
+        if (program)
+          clReleaseProgram(program);
         for (int i = 0; i < QUEUE_SIZE; ++i) {
           clReleaseCommandQueue(queue[i]);
         }
         clReleaseContext(context);
-        for(const auto& it : Clid2DimSizeMap)
-          if(it.second.maxSizes)
-            delete[] it.second.maxSizes;
     }
     bool tryLock() {
-      int leftover = m_atomicLock.fetch_add();
-      if (leftover < m_maxCommandQueuePerDevice) {
+      int old_val = m_atomicLock.fetch_add();
+      if ((old_val+1) < m_maxCommandQueuePerDevice) {
         return true;
       } else {
         m_atomicLock.fetch_sub();
@@ -270,8 +269,8 @@ struct AMPAllocator
     }
     void releaseLock()
     {
-      int leftover = m_atomicLock.fetch_sub();
-      assert(leftover >= 0);
+      int old_val = m_atomicLock.fetch_sub();
+      assert(old_val >= 1);
     };
     void resetLock()
     {
@@ -285,6 +284,7 @@ struct AMPAllocator
     cl_device_id     device;
     cl_command_queue queue[QUEUE_SIZE];
     int              queue_id;
+    cl_program       program;
 #if defined(CXXAMP_NV)
     std::map<void *, rw_info> rwq;
 #endif

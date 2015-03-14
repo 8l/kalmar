@@ -36,9 +36,6 @@ AMPAllocator* getAllocator(cl_device_id id)
 {
   return DeviceMgr.getAllocator(id);
 }
-cl_program& getCLProgram() {
-  return DeviceMgr.program;
-}
 accelerator* getAvailableAccelerator()
 {
   AMPAllocator* amp = DeviceMgr.getAllocator(DeviceMgr.getAvailableDevice());
@@ -52,7 +49,7 @@ std::map<cl_kernel, std::vector<cl_event> > kernelEventMap;
 } // namespace Concurrency
 
 namespace {
-bool __mcw_cxxamp_compiled = false;
+std::map<cl_device_id, bool>__mcw_cxxamp_compiled;
 }
 
 #ifdef __APPLE__
@@ -245,7 +242,7 @@ namespace Concurrency { namespace CLAMP {
         assert(0 && "Unsupported function");
 #else
         cl_int err;
-        if (!__mcw_cxxamp_compiled) {
+        if (!__mcw_cxxamp_compiled[device]) {
 #ifdef __APPLE__
             const struct section_64 *sect = getsectbyname("binary", "kernel_cl");
             unsigned char *kernel_source = (unsigned char*)calloc(1, sect->size+1);
@@ -380,7 +377,7 @@ namespace Concurrency { namespace CLAMP {
 
             } // if (precompiled_kernel) 
 
-            __mcw_cxxamp_compiled = true;
+            __mcw_cxxamp_compiled[device] = true;
             free(kernel_source);
             // FIXME: MatchKernelNames is temporarily commented out for better purpose
             // therefore no need to call the following

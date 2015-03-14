@@ -38,7 +38,7 @@ namespace details
 class DeviceManager
 {
 public:
-  DeviceManager() : program (NULL) {
+  DeviceManager() {
     cl_uint num_platforms;
     starting_id = NULL;
     cl_int err;
@@ -72,11 +72,13 @@ public:
 
   ~DeviceManager() {
     CLAMP::ReleaseKernelObject();
+    for(const auto& it : Clid2DimSizeMap)
+     if(it.second.maxSizes)
+      delete[] it.second.maxSizes;
+
     for (auto& it : m_allocators) {
       delete it.second;
     }
-    if(program)
-     clReleaseProgram(program);
   }
   // Get device count
   int getCount() const {return m_count;}
@@ -122,7 +124,6 @@ private:
 
 public:
   static cl_device_id starting_id; // the very first GPU device
-  cl_program program;
 };
 }; // namespace details
 }; // namespace Concurrency::details
