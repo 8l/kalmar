@@ -94,7 +94,9 @@ static inline void mcw_cxxamp_launch_kernel(size_t *ext,
 #else
   cl_int err;
   // TODO: all captured array_views and arrays shall be located on the same accelerator
-  AMPAllocator* aloc = getAllocator(accl_view.get_accelerator().get_device_id());
+  AMPAllocator* aloc = getAllocator(accl_view.get_is_auto_selection()?
+                                   Concurrency::getAvailableAccelerator()->get_device_id():
+                                   accl_view.get_accelerator().get_device_id());
   CLAMP::CompileKernels(aloc->program, aloc->context, aloc->device);
   int* foo = reinterpret_cast<int*>(&Kernel::__cxxamp_trampoline);
   std::string transformed_kernel_name =

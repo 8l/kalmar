@@ -156,8 +156,8 @@ public:
   friend class accelerator;
   template <typename T, int>
   friend class array;
-  explicit accelerator_view(accelerator* accel) :
-    is_debug(false), is_auto_selection(true), version(0), queuing_mode(queuing_mode_automatic), _accelerator(accel) {}
+  explicit accelerator_view(accelerator* accel, bool is_auto) :
+    is_debug(false), is_auto_selection(is_auto), version(0), queuing_mode(queuing_mode_automatic), _accelerator(accel) {}
   //End CLAMP-specific
   accelerator* _accelerator;
 };
@@ -234,7 +234,7 @@ public:
     return _gpu_accelerator->get_default_view();
 #else
     //FIXME: set auto_select flag
-    return accelerator_view(Concurrency::getAvailableAccelerator());
+    return accelerator_view(NULL, true);
 #endif
   }
   accelerator& operator=(const accelerator& other);

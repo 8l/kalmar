@@ -49,7 +49,7 @@ inline accelerator::accelerator(const std::wstring& path) :
   supports_cpu_shared_memory(false), // constructor will set it
   dedicated_memory(0), // constructor will set it
   default_access_type(access_type_none),
-  default_view( accelerator_view(this) )
+  default_view( accelerator_view(this, false))
     {
 #if !defined(CXXAMP_ENABLE_HSA)
   device_path = path;
@@ -190,7 +190,7 @@ inline accelerator_view accelerator::create_view(queuing_mode qmode) {
   accelerator_view sa( (device_path == std::wstring(gpu_accelerator)) ?
                       _gpu_accelerator.get() : _cpu_accelerator.get() );
 #else
-  accelerator_view sa( this );
+  accelerator_view sa( this, false );
 #endif
   sa.queuing_mode = qmode;
   return sa;
