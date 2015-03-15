@@ -1570,7 +1570,7 @@ public:
 
   __global T& operator[](const index<N>& idx) restrict(amp,cpu) {
 #ifndef __GPU__
-      if(pav && (pav->get_accelerator() == accelerator(accelerator::gpu_accelerator))) {
+      if(pav && (pav->get_accelerator().get_device_path().substr(0,3) == accelerator::gpu_accelerator)) {
           throw runtime_exception("The array is not accessible on CPU.", 0);
       }
       m_device.synchronize();
@@ -1580,7 +1580,7 @@ public:
   }
   __global const T& operator[](const index<N>& idx) const restrict(amp,cpu) {
 #ifndef __GPU__
-      if(pav && (pav->get_accelerator() == accelerator(accelerator::gpu_accelerator))) {
+      if(pav && (pav->get_accelerator().get_device_path().substr(0,3) == accelerator::gpu_accelerator)) {
           throw runtime_exception("The array is not accessible on CPU.", 0);
       }
       m_device.synchronize();

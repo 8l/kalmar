@@ -102,6 +102,12 @@ inline accelerator::accelerator(const std::wstring& path) :
       std::wstring acc_type = path_temp.substr(0,3);
       // with L"gpu" prefix
       if (acc_type == std::wstring(gpu_accelerator)) {
+        #ifndef __GPU__
+        if (path_temp.substr(3,path_temp.length()).empty()) {
+          std::wcout << "Unsupported device path =  " << path << "\n";
+          throw runtime_exception("errorMsg_throw", 0);
+        }
+        #endif
         int shipped_id = std::stoi(path_temp.substr(3,path_temp.length()));
         cl_device_id devices[1024];
         err = clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_GPU, 1024, devices, NULL);
@@ -436,7 +442,7 @@ array<T, N>::array(int e0, int e1, int e2, accelerator_view av, access_type cpu_
 template<typename T, int N>
 array<T, N>::array(const Concurrency::extent<N>& extent, accelerator_view av, accelerator_view associated_av) : array(extent, av.get_accelerator()) {
   pav = new accelerator_view(av);
-  if (av.get_accelerator() == accelerator(accelerator::gpu_accelerator) &&
+  if (av.get_accelerator().get_device_path().substr(0,3) == accelerator::gpu_accelerator &&
       associated_av.get_accelerator() == accelerator(accelerator::cpu_accelerator)) {
     paav = new accelerator_view(av);
   } else {
