@@ -49,7 +49,7 @@ do
       HOST_FILE=$TEMP_DIR/$FILENAME.host.o
 
       # extract kernel section
-      objcopy -O binary -j .kernel $ARG $KERNEL_FILE 
+      objcopy -O binary -j .kernel $ARG $KERNEL_FILE
 
       # extract host section
       objcopy -R .kernel $ARG $HOST_FILE
@@ -88,7 +88,7 @@ if [ -n "$LINK_KERNEL_ARGS" ]; then
 
   # combine kernel sections together
   $LINK $LINK_KERNEL_ARGS | $OPT -always-inline - -o $TEMP_DIR/kernel.bc
-  
+
   # lower to SPIR
   if [ "@HAS_OPENCL@" == "1" ]; then
     # lower to SPIR
@@ -102,7 +102,7 @@ if [ -n "$LINK_KERNEL_ARGS" ]; then
       popd > /dev/null
     fi
   fi
-  
+
   # lower to OpenCL C
   if [ "@HAS_OPENCL@" == "1" ]; then
     # lower to SPIR
@@ -116,7 +116,7 @@ if [ -n "$LINK_KERNEL_ARGS" ]; then
       popd > /dev/null
     fi
   fi
-  
+
   # lower to HSA
   if [ "@HAS_HSA@" == "1" ]; then
     # lower to HSAIL
@@ -130,7 +130,7 @@ if [ -n "$LINK_KERNEL_ARGS" ]; then
       popd > /dev/null
     fi
   fi
-  
+
   if [ $ret == 0 ]; then
     # link everything together
     if [ "@HAS_OPENCL@" == "1" ] && [ "@HAS_HSA@" == "1" ]; then

@@ -27,40 +27,6 @@ std::shared_ptr<accelerator> accelerator::_gpu_accelerator = std::make_shared<ac
 std::shared_ptr<accelerator> accelerator::_cpu_accelerator = std::make_shared<accelerator>(accelerator::cpu_accelerator);
 std::shared_ptr<accelerator> accelerator::_default_accelerator = nullptr;
 
-std::mutex afa_u, afa_i;
-unsigned int atomic_add_unsigned(unsigned int *x, unsigned int y) {
-    std::lock_guard<std::mutex> guard(afa_u);
-    *x += y;
-    return *x;
-}
-int atomic_add_int(int *x, int y) {
-    std::lock_guard<std::mutex> guard(afa_i);
-    *x += y;
-    return *x;
-}
-std::mutex afm_u, afm_i;
-unsigned int atomic_max_unsigned(unsigned int *p, unsigned int val) {
-    std::lock_guard<std::mutex> guard(afm_u);
-    *p = std::max(*p, val);
-    return *p;
-}
-int atomic_max_int(int *p, int val) {
-    std::lock_guard<std::mutex> guard(afm_i);
-    *p = std::max(*p, val);
-    return *p;
-}
-std::mutex afi_u, afi_i;
-unsigned int atomic_inc_unsigned(unsigned int *p) {
-    std::lock_guard<std::mutex> guard(afi_u);
-    *p += 1;
-    return *p;
-}
-int atomic_inc_int(int *p) {
-    std::lock_guard<std::mutex> guard(afi_i);
-    *p += 1;
-    return *p;
-}
-
 } // namespace Concurrency
 
 std::vector<std::string> __mcw_kernel_names;
@@ -92,7 +58,9 @@ struct RuntimeImpl {
     m_LaunchKernelAsyncImpl(nullptr),
     m_MatchKernelNamesImpl(nullptr),
     m_PushArgImpl(nullptr),
-    m_GetAllocatorImpl(nullptr), isCPU(false) {
+    m_PushArgPtrImpl(nullptr),
+    m_GetAllocatorImpl(nullptr),
+    isCPU(false) {
     //std::cout << "dlopen(" << libraryName << ")\n";
     m_RuntimeHandle = dlopen(libraryName, RTLD_LAZY);
     if (!m_RuntimeHandle) {
@@ -119,6 +87,7 @@ struct RuntimeImpl {
     m_LaunchKernelAsyncImpl = (LaunchKernelAsyncImpl_t) dlsym(m_RuntimeHandle, "LaunchKernelAsyncImpl");
     m_MatchKernelNamesImpl = (MatchKernelNamesImpl_t) dlsym(m_RuntimeHandle, "MatchKernelNamesImpl");
     m_PushArgImpl = (PushArgImpl_t) dlsym(m_RuntimeHandle, "PushArgImpl");
+    m_PushArgPtrImpl = (PushArgPtrImpl_t) dlsym(m_RuntimeHandle, "PushArgPtrImpl");
     m_GetAllocatorImpl = (GetAllocatorImpl_t) dlsym(m_RuntimeHandle, "GetAllocatorImpl");
 
   }
@@ -135,6 +104,7 @@ struct RuntimeImpl {
   LaunchKernelAsyncImpl_t m_LaunchKernelAsyncImpl;
   MatchKernelNamesImpl_t m_MatchKernelNamesImpl;
   PushArgImpl_t m_PushArgImpl;
+  PushArgPtrImpl_t m_PushArgPtrImpl;
   GetAllocatorImpl_t m_GetAllocatorImpl;
   bool isCPU;
 };
@@ -509,6 +479,9 @@ void MatchKernelNames(std::string& fixed_name) {
 
 void PushArg(void *k_, int idx, size_t sz, const void *s) {
   GetOrInitRuntime()->m_PushArgImpl(k_, idx, sz, s);
+}
+void PushArgPtr(void *k_, int idx, size_t sz, const void *s) {
+  GetOrInitRuntime()->m_PushArgPtrImpl(k_, idx, sz, s);
 }
 
 } // namespace CLAMP
