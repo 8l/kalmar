@@ -1282,6 +1282,9 @@ struct array_projection_helper<T, 1>
     }
 };
 
+static const auto _cpu_check = accelerator(accelerator::cpu_accelerator);
+static const auto _gpu_check = accelerator(accelerator::gpu_accelerator);
+
 template <typename T, int N = 1>
 class array_helper {
 public:
@@ -1293,7 +1296,7 @@ public:
   __attribute__((annotate("serialize")))
   void __cxxamp_serialize(Serialize& s) const {
     array<T, N>* p_arr = (array<T, N>*)m_arr;
-    if (p_arr && p_arr->pav && p_arr->pav->get_accelerator() == accelerator(accelerator::cpu_accelerator)) {
+    if (p_arr && p_arr->pav && p_arr->pav->get_accelerator() == _cpu_check) {
       throw runtime_exception(__errorMsg_UnsupportedAccelerator, E_FAIL);
     }    
   }
@@ -1482,7 +1485,7 @@ public:
 
   __global T& operator[](const index<N>& idx) restrict(amp,cpu) {
 #ifndef __GPU__
-      if(pav && (pav->get_accelerator() == accelerator(accelerator::gpu_accelerator))) {
+      if(pav && (pav->get_accelerator() == _gpu_check)) {
           throw runtime_exception("The array is not accessible on CPU.", 0);
       }
 #endif
@@ -1491,7 +1494,7 @@ public:
   }
   __global const T& operator[](const index<N>& idx) const restrict(amp,cpu) {
 #ifndef __GPU__
-      if(pav && (pav->get_accelerator() == accelerator(accelerator::gpu_accelerator))) {
+      if(pav && (pav->get_accelerator() == _gpu_check)) {
           throw runtime_exception("The array is not accessible on CPU.", 0);
       }
 #endif
@@ -2182,7 +2185,7 @@ void parallel_for_each(tiled_extent<D0> compute_domain, const Kernel& f);
 
 template <int N, typename Kernel>
 void parallel_for_each(const accelerator_view& accl_view, extent<N> compute_domain, const Kernel& f){
-    if (accl_view.get_accelerator() == accelerator(accelerator::cpu_accelerator)) {
+    if (accl_view.get_accelerator() == _cpu_check) {
       throw runtime_exception(__errorMsg_UnsupportedAccelerator, E_FAIL);
     }
     parallel_for_each(compute_domain, f);
@@ -2190,7 +2193,7 @@ void parallel_for_each(const accelerator_view& accl_view, extent<N> compute_doma
 
 template <int D0, int D1, int D2, typename Kernel>
 void parallel_for_each(const accelerator_view& accl_view, tiled_extent<D0,D1,D2> compute_domain, const Kernel& f) {
-    if (accl_view.get_accelerator() == accelerator(accelerator::cpu_accelerator)) {
+    if (accl_view.get_accelerator() == _cpu_check) {
       throw runtime_exception(__errorMsg_UnsupportedAccelerator, E_FAIL);
     }
     parallel_for_each(compute_domain, f);
@@ -2198,7 +2201,7 @@ void parallel_for_each(const accelerator_view& accl_view, tiled_extent<D0,D1,D2>
 
 template <int D0, int D1, typename Kernel>
 void parallel_for_each(const accelerator_view& accl_view, tiled_extent<D0,D1> compute_domain, const Kernel& f) {
-    if (accl_view.get_accelerator() == accelerator(accelerator::cpu_accelerator)) {
+    if (accl_view.get_accelerator() == _cpu_check) {
       throw runtime_exception(__errorMsg_UnsupportedAccelerator, E_FAIL);
     }
     parallel_for_each(compute_domain, f);
@@ -2206,7 +2209,7 @@ void parallel_for_each(const accelerator_view& accl_view, tiled_extent<D0,D1> co
 
 template <int D0, typename Kernel>
 void parallel_for_each(const accelerator_view& accl_view, tiled_extent<D0> compute_domain, const Kernel& f) {
-    if (accl_view.get_accelerator() == accelerator(accelerator::cpu_accelerator)) {
+    if (accl_view.get_accelerator() == _cpu_check) {
       throw runtime_exception(__errorMsg_UnsupportedAccelerator, E_FAIL);
     }
     parallel_for_each(compute_domain, f);
