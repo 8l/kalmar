@@ -53,6 +53,13 @@ struct rw_info
     int count;
     bool used;
 };
+
+struct DimMaxSize {
+  cl_uint dimensions;
+  size_t* maxSizes;
+};
+static std::map<cl_device_id, struct DimMaxSize> Clid2DimSizeMap;
+
 class OpenCLAMPAllocator : public AMPAllocator
 {
 public:
@@ -79,6 +86,20 @@ public:
         assert(err == CL_SUCCESS);
         queue = clCreateCommandQueue(context, device, 0, &err);
         assert(err == CL_SUCCESS);
+        // C++ AMP specifications
+        // The maximum number of tiles per dimension will be no less than 65535.
+        // The maximum number of threads in a tile will be no less than 1024.
+        // In 3D tiling, the maximal value of D0 will be no less than 64.
+        cl_uint dimensions = 0;
+        err = clGetDeviceInfo(device, CL_DEVICE_MAX_WORK_ITEM_DIMENSIONS, sizeof(cl_uint), &dimensions, NULL);
+        assert(err == CL_SUCCESS);
+        size_t *maxSizes = new size_t[dimensions];
+        err = clGetDeviceInfo(device, CL_DEVICE_MAX_WORK_ITEM_SIZES, sizeof(size_t) * dimensions, maxSizes, NULL);
+        assert(err == CL_SUCCESS);
+        struct DimMaxSize d;
+        d.dimensions = dimensions;
+        d.maxSizes = maxSizes;
+        Clid2DimSizeMap[device] = d;
     }
     void init(void *data, int count) {
         if (count > 0) {
@@ -101,16 +122,17 @@ public:
         mem_info.erase(iter);
     }
     ~OpenCLAMPAllocator() {
+        clReleaseProgram(program);
         clReleaseCommandQueue(queue);
         clReleaseContext(context);
-        clReleaseKernel(kernel);
-        clReleaseProgram(program);
+        for(const auto& it : Clid2DimSizeMap)
+            if(it.second.maxSizes)
+                delete[] it.second.maxSizes;
     }
 
     std::map<void *, cl_mem> mem_info;
     cl_context       context;
     cl_device_id     device;
-    cl_kernel        kernel;
     cl_command_queue queue;
     cl_program       program;
     std::map<void *, rw_info> rwq;
@@ -420,9 +442,9 @@ extern "C" void *CreateKernelImpl(const char* s, void* kernel_size, void* kernel
   cl_int err;
   Concurrency::OpenCLAMPAllocator& aloc = Concurrency::getOpenCLAMPAllocator();
   Concurrency::CLAMP::CLCompileKernels(aloc.program, aloc.context, aloc.device, kernel_size, kernel_source);
-  aloc.kernel = clCreateKernel(aloc.program, s, &err);
+  cl_kernel kernel = clCreateKernel(aloc.program, s, &err);
   assert(err == CL_SUCCESS);
-  return aloc.kernel;
+  return kernel;
 }
 
 extern "C" void LaunchKernelImpl(void *kernel, size_t dim_ext, size_t *ext, size_t *local_size) {
@@ -433,10 +455,8 @@ extern "C" void LaunchKernelImpl(void *kernel, size_t dim_ext, size_t *ext, size
       // The maximum number of tiles per dimension will be no less than 65535.
       // The maximum number of threads in a tile will be no less than 1024.
       // In 3D tiling, the maximal value of D0 will be no less than 64.
-      cl_uint dimensions;
-      err = clGetDeviceInfo(aloc.device, CL_DEVICE_MAX_WORK_ITEM_DIMENSIONS, sizeof(cl_uint), &dimensions, NULL);
-      size_t *maxSizes = new size_t[dimensions];
-      err = clGetDeviceInfo(aloc.device, CL_DEVICE_MAX_WORK_ITEM_SIZES, sizeof(size_t) * dimensions, maxSizes, NULL);
+      cl_uint dimensions = Concurrency::Clid2DimSizeMap[aloc.device].dimensions;
+      size_t *maxSizes = Concurrency::Clid2DimSizeMap[aloc.device].maxSizes;
       bool is = true;
       int threads_per_tile = 1;
       for(int i = 0; local_size && i < dim_ext; i++) {
@@ -456,10 +476,11 @@ extern "C" void LaunchKernelImpl(void *kernel, size_t dim_ext, size_t *ext, size
   }
 
   aloc.write();
-  err = clEnqueueNDRangeKernel(aloc.queue, aloc.kernel, dim_ext, NULL, ext, local_size, 0, NULL, NULL);
+  err = clEnqueueNDRangeKernel(aloc.queue, (cl_kernel)kernel, dim_ext, NULL, ext, local_size, 0, NULL, NULL);
   assert(err == CL_SUCCESS);
   aloc.read();
   clFinish(aloc.queue);
+  clReleaseKernel((cl_kernel)kernel);
 }
 
 extern "C" void *LaunchKernelAsyncImpl(void *ker, size_t nr_dim, size_t *global, size_t *local) {
