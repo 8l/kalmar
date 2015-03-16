@@ -59,6 +59,14 @@ struct DimMaxSize {
   size_t* maxSizes;
 };
 static std::map<cl_device_id, struct DimMaxSize> Clid2DimSizeMap;
+typedef std::map<std::string, cl_kernel> KernelObject;
+std::map<cl_program, KernelObject> Pro2KernelObject;
+void ReleaseKernelObject() {
+  for(const auto& it : Pro2KernelObject)
+    for(const auto& itt : it.second)
+      if(itt.second)
+        clReleaseKernel(itt.second);
+}
 
 class OpenCLAMPAllocator : public AMPAllocator
 {
@@ -128,6 +136,7 @@ public:
         for(const auto& it : Clid2DimSizeMap)
             if(it.second.maxSizes)
                 delete[] it.second.maxSizes;
+        ReleaseKernelObject();
     }
 
     std::map<void *, cl_mem> mem_info;
@@ -442,9 +451,14 @@ extern "C" void *CreateKernelImpl(const char* s, void* kernel_size, void* kernel
   cl_int err;
   Concurrency::OpenCLAMPAllocator& aloc = Concurrency::getOpenCLAMPAllocator();
   Concurrency::CLAMP::CLCompileKernels(aloc.program, aloc.context, aloc.device, kernel_size, kernel_source);
-  cl_kernel kernel = clCreateKernel(aloc.program, s, &err);
-  assert(err == CL_SUCCESS);
-  return kernel;
+  Concurrency::KernelObject& KO = Concurrency::Pro2KernelObject[aloc.program];
+  std::string name(s);
+  if (KO[name] == 0) {
+       cl_int err;
+       KO[name] = clCreateKernel(aloc.program, name.c_str(), &err);
+       assert(err == CL_SUCCESS);
+  }
+  return KO[name];
 }
 
 extern "C" void LaunchKernelImpl(void *kernel, size_t dim_ext, size_t *ext, size_t *local_size) {
@@ -480,7 +494,6 @@ extern "C" void LaunchKernelImpl(void *kernel, size_t dim_ext, size_t *ext, size
   assert(err == CL_SUCCESS);
   aloc.read();
   clFinish(aloc.queue);
-  clReleaseKernel((cl_kernel)kernel);
 }
 
 extern "C" void *LaunchKernelAsyncImpl(void *ker, size_t nr_dim, size_t *global, size_t *local) {

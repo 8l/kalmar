@@ -37,10 +37,10 @@ struct mm_info
         : data(src), free(false) { getAllocator()->init(data, count); }
 #else
     mm_info(int count)
-        : count(count), host(::operator new(count)), device(host),
+        : count(count), host(aligned_alloc(0x1000, count)), device(host),
         dirty(host), discard(false) { getAllocator()->init(device, count); }
     mm_info(int count, void *src)
-        : count(count), host(src), device(::operator new(count)),
+        : count(count), host(src), device(aligned_alloc(0x1000, count)),
         dirty(host), discard(false) { getAllocator()->init(device, count); }
 #endif
 
