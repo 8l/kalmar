@@ -96,6 +96,16 @@ public:
     }
   }
 
+  void* getDevicePointer(void* data) {
+    for (auto &it: m_allocators) {
+      AMPAllocator* amp = it.second;
+      void* devicePtr = amp->device_data(data);
+      if (devicePtr)
+        return devicePtr;
+    }
+    return NULL;
+  }
+
   // TODO: shall returned pre-created accelerators
   cl_device_id getAvailableDevice()
   {

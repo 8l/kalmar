@@ -42,7 +42,9 @@ accelerator* getAvailableAccelerator()
   assert(amp);
   return amp->get_accelerator();
 }
-
+void* getDevicePointer(void* data) {
+  return DeviceMgr.getDevicePointer(data);
+}
 
 std::map<cl_kernel, std::vector<cl_event> > kernelEventMap;
 //int mm_info::waitOnKernelsCount = 0;
