@@ -115,7 +115,7 @@ private:
 template <typename T>
 class _data_host {
     std::shared_ptr<mm_info> mm;
-    template <typename U> friend struct _data_host;
+    template <typename U> friend class _data_host;
 public:
     _data_host(int count)
         : mm(std::make_shared<mm_info>(count * sizeof(T))) {}
