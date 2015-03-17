@@ -1171,10 +1171,16 @@ struct projection_helper<T, 1>
     //      T& operator[](int i) const restrict(amp,cpu);
     typedef __global T& result_type;
     static result_type project(array_view<T, 1>& now, int i) restrict(amp,cpu) {
+#ifndef __GPU__
+        now.cache.synchronize();
+#endif
         __global T *ptr = reinterpret_cast<__global T *>(now.cache.get() + i + now.offset + now.index_base[0]);
         return *ptr;
     }
     static result_type project(const array_view<T, 1>& now, int i) restrict(amp,cpu) {
+#ifndef __GPU__
+        now.cache.synchronize();
+#endif
         __global T *ptr = reinterpret_cast<__global T *>(now.cache.get() + i + now.offset + now.index_base[0]);
         return *ptr;
     }
@@ -1795,9 +1801,6 @@ public:
 
   typename projection_helper<T, N>::result_type
       operator[] (int i) const restrict(amp,cpu) {
-#ifndef __GPU__
-      synchronize();
-#endif
           return projection_helper<T, N>::project(*this, i);
       }
   __global T& operator()(const index<N>& idx) const restrict(amp,cpu) {
@@ -2025,9 +2028,6 @@ public:
 
   typename projection_helper<const T, N>::const_result_type
       operator[] (int i) const restrict(amp,cpu) {
-#ifndef __GPU__
-      synchronize();
-#endif
     return projection_helper<const T, N>::project(*this, i);
   }
 
@@ -2219,14 +2219,24 @@ void parallel_for_each(const accelerator_view& accl_view, tiled_extent<D0> compu
 namespace concurrency = Concurrency;
 // Specialization and inlined implementation of C++AMP classes/templates
 #include "amp_impl.h"
+
+// Remove warning: unused variable 'foo' [-Wunused-variable]
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-variable"
+#endif
 #include "parallel_for_each.h"
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
 
 namespace Concurrency {
 
 template <typename T>
 void copy(const array_view<const T, 1>& src, const array_view<T, 1>& dest) {
-    for (int i = 0; i < dest.get_extent()[0]; ++i)
-        dest[i] = src[i];
+    T* ptr_dest = dest.data();
+    const T* ptr_src = src.data();
+    memcpy(ptr_dest, ptr_src, sizeof(T)*dest.get_extent()[0]);
 }
 template <typename T, int N>
 void copy(const array_view<const T, N>& src, const array_view<T, N>& dest) {
@@ -2236,8 +2246,9 @@ void copy(const array_view<const T, N>& src, const array_view<T, N>& dest) {
 
 template <typename T>
 void copy(const array_view<T, 1>& src, const array_view<T, 1>& dest) {
-    for (int i = 0; i < dest.get_extent()[0]; ++i)
-        dest[i] = src[i];
+    T* ptr_dest = dest.data();
+    const T* ptr_src = src.data();
+    memcpy(ptr_dest, ptr_src, sizeof(T)*dest.get_extent()[0]);
 }
 template <typename T, int N>
 void copy(const array_view<T, N>& src, const array_view<T, N>& dest) {
@@ -2247,8 +2258,9 @@ void copy(const array_view<T, N>& src, const array_view<T, N>& dest) {
 
 template <typename T>
 void copy(const array<T, 1>& src, const array_view<T, 1>& dest) {
-    for (int i = 0; i < dest.get_extent()[0]; ++i)
-        dest[i] = src[i];
+    T* ptr_dest = dest.data();
+    const T* ptr_src = src.data();
+    memcpy(ptr_dest, ptr_src, sizeof(T)*dest.get_extent()[0]);
 }
 template <typename T, int N>
 void copy(const array<T, N>& src, const array_view<T, N>& dest) {
@@ -2258,19 +2270,18 @@ void copy(const array<T, N>& src, const array_view<T, N>& dest) {
 
 template <typename T>
 void copy(const array<T, 1>& src, array<T, 1>& dest) {
-    for (int i = 0; i < dest.get_extent()[0]; ++i)
-        dest[i] = src[i];
+    memmove(dest.data(), src.data(), dest.get_extent().size() * sizeof(T));
 }
 template <typename T, int N>
 void copy(const array<T, N>& src, array<T, N>& dest) {
-    for (int i = 0; i < dest.get_extent()[0]; ++i)
-        Concurrency::copy(src[i], dest[i]);
+    memmove(dest.data(), src.data(), dest.get_extent().size() * sizeof(T));
 }
 
 template <typename T>
 void copy(const array_view<const T, 1>& src, array<T, 1>& dest) {
-    for (int i = 0; i < dest.get_extent()[0]; ++i)
-        dest[i] = src[i];
+    T* ptr_dest = dest.data();
+    const T* ptr_src = src.data();
+    memcpy(ptr_dest, ptr_src, sizeof(T)*dest.get_extent()[0]);
 }
 template <typename T, int N>
 void copy(const array_view<const T, N>& src, array<T, N>& dest) {
@@ -2280,8 +2291,9 @@ void copy(const array_view<const T, N>& src, array<T, N>& dest) {
 
 template <typename T>
 void copy(const array_view<T, 1>& src, array<T, 1>& dest) {
-    for (int i = 0; i < dest.get_extent()[0]; ++i)
-        dest[i] = src[i];
+    T* ptr_dest = dest.data();
+    const T* ptr_src = src.data();
+    memcpy(ptr_dest, ptr_src, sizeof(T)*dest.get_extent()[0]);
 }
 template <typename T, int N>
 void copy(const array_view<T, N>& src, array<T, N>& dest) {
