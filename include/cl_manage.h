@@ -151,6 +151,7 @@ struct AMPAllocator
 
       resetLock();
       _accelerator = accelerator(a_device_path);
+      assert (_accelerator.get_device_id() == a_device);
     }
     void init(void *data, int count) {
         auto iter = mem_info.find(data);
@@ -294,8 +295,9 @@ struct AMPAllocator
 };
 
 AMPAllocator* getAllocator(cl_device_id id);
-cl_program& getCLProgram();
-
+#if defined(CXXAMP_NV)
+void* getDevicePointer(void* data);
+#endif
 struct mm_info
 {
     std::vector<cl_kernel> serializedKernel;
@@ -428,7 +430,7 @@ public:
     void synchronize() const { mm->synchronize(); }
     void discard() const { mm->disc(); }
     void refresh() const { mm->refresh(); }
-
+    cl_device_id device_id() const { return mm->_device_id; }
     __attribute__((annotate("serialize")))
         void __cxxamp_serialize(Serialize& s) const {
             mm->serialize(s);

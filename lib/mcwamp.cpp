@@ -42,10 +42,11 @@ accelerator* getAvailableAccelerator()
   assert(amp);
   return amp->get_accelerator();
 }
+#if defined(CXXAMP_NV)
 void* getDevicePointer(void* data) {
   return DeviceMgr.getDevicePointer(data);
 }
-
+#endif
 std::map<cl_kernel, std::vector<cl_event> > kernelEventMap;
 //int mm_info::waitOnKernelsCount = 0;
 } // namespace Concurrency
