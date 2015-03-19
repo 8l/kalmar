@@ -156,8 +156,10 @@ public:
     }
     void free(void *data) {
         auto iter = mem_info.find(data);
-        clReleaseMemObject(iter->second);
-        mem_info.erase(iter);
+        if (iter != std::end(mem_info)) {
+            clReleaseMemObject(iter->second);
+            mem_info.erase(iter);
+        }
     }
     ~OpenCLAMPAllocator() {
         clReleaseProgram(program);
