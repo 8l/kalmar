@@ -397,17 +397,19 @@ struct mm_info
 // Dummy interface that looks somewhat like std::shared_ptr<T>
 template <typename T>
 class _data {
+    cl_device_id _device_id; // Meaningless. The only reason is to make compilation happy
 public:
     _data() = delete;
-    _data(int count, cl_device_id device_id) {}
+    _data(int count, cl_device_id device_id) : _device_id(device_id) {}
     _data(const _data& d) restrict(cpu, amp)
-        : p_(d.p_) {}
+        : p_(d.p_), _device_id(d._device_id) {}
     template <typename U>
         _data(const _data<U>& d) restrict(cpu, amp)
-        : p_(reinterpret_cast<T *>(d.get())) {}
+        : p_(reinterpret_cast<T *>(d.get())), _device_id(d.device_id) {}
     __attribute__((annotate("user_deserialize")))
         explicit _data(__global T* t) restrict(cpu, amp) { p_ = t; }
     __global T* get(void) const restrict(cpu, amp) { return p_; }
+    cl_device_id device_id() const { return _device_id; }
 private:
     __global T* p_;
 };
