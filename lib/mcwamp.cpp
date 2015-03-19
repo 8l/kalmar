@@ -101,7 +101,6 @@ struct RuntimeImpl {
       std::cerr << "C++AMP runtime load error: " << dlerror() << std::endl;
       return;
     }
-
     LoadSymbols();
   }
 

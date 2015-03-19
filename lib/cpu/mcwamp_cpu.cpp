@@ -27,6 +27,7 @@ struct rw_info
 class CPUAMPAllocator : public AMPAllocator
 { 
 public:
+  void* getQueue() { return nullptr; }
   CPUAMPAllocator() {}
   void init(void *data, int count) {
   }
@@ -41,6 +42,7 @@ public:
       }
     }
   }
+  void *device_data(void *) { return nullptr; }
   void read() {
     for (auto& it : rwq) {
       rw_info& rw = it.second;

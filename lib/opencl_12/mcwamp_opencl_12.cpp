@@ -71,6 +71,7 @@ void ReleaseKernelObject() {
 class OpenCLAMPAllocator : public AMPAllocator
 {
 public:
+    void* getQueue() { return queue; }
     OpenCLAMPAllocator() {
         cl_uint          num_platforms;
         cl_int           err;
@@ -122,12 +123,21 @@ public:
     }
     void write() {
     }
+    void* device_data(void* data) {
+        auto it = rwq.find(data);
+        if (it != std::end(rwq)) {
+            return mem_info[data];
+        }
+        return NULL;
+    }
     void read() {
     }
     void free(void *data) {
         auto iter = mem_info.find(data);
-        clReleaseMemObject(iter->second);
-        mem_info.erase(iter);
+        if (iter != std::end(mem_info)) {
+            clReleaseMemObject(iter->second);
+            mem_info.erase(iter);
+        }
     }
     ~OpenCLAMPAllocator() {
         clReleaseProgram(program);

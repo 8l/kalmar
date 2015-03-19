@@ -212,6 +212,14 @@ add_custom_target(libc++
   WORKING_DIRECTORY ${LIBCXX_BIN_DIR}
   DEPENDS clang
 )
+add_custom_target(
+    libcpp
+    DEPENDS ${CMAKE_BINARY_DIR}/libc++/libcxx/lib/libc++.so
+    )
+add_custom_target(
+    libcpprt
+    DEPENDS ${CMAKE_BINARY_DIR}/libc++/libcxxrt/lib/libcxxrt.so
+    )
 endif (APPLE)
 
 add_subdirectory(lib)
