@@ -397,7 +397,6 @@ struct mm_info
 // Dummy interface that looks somewhat like std::shared_ptr<T>
 template <typename T>
 class _data {
-    cl_device_id _device_id; // Meaningless. The only reason is to make compilation happy
 public:
     _data() = delete;
     _data(int count, cl_device_id device_id) : _device_id(device_id) {}
@@ -412,6 +411,7 @@ public:
     cl_device_id device_id() const { return _device_id; }
 private:
     __global T* p_;
+    cl_device_id _device_id; // Meaningless. The only reason is to make compilation happy
 };
 
 template <typename T>
