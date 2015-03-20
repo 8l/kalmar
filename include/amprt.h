@@ -105,6 +105,14 @@ public:
     }
     return NULL;
   }
+  cl_command_queue getOCLQueue(void* device_ptr) {
+    for (auto &it: m_allocators) {
+      AMPAllocator* amp = it.second;
+      if(amp && amp->isAllocated(device_ptr))
+        return amp->getQueue();
+    }
+    return NULL;
+  }
 #endif
   // TODO: shall returned pre-created accelerators
   cl_device_id getAvailableDevice()

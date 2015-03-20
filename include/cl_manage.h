@@ -217,11 +217,24 @@ struct AMPAllocator
     }
     // Used in Concurrency::copy
     void* device_data(void* data) {
+      if (!data)
+        return NULL;
       auto it = rwq.find(data);
       if (it != std::end(rwq)) {
         return mem_info[data].dm;
       }
       return NULL;
+    }
+    // Determine if the device_ptr is allocated on assocated accelerator or not
+    bool isAllocated(void* device_ptr) {
+      if (!device_ptr)
+        return false;
+      for (auto &it: rwq) {
+        // Reverse lookup of the map
+        if(device_ptr == mem_info[it.first].dm)
+          return true;
+      }
+      return false;
     }
     void read() {
       for (auto& it : rwq) {
@@ -297,6 +310,7 @@ struct AMPAllocator
 AMPAllocator* getAllocator(cl_device_id id);
 #if defined(CXXAMP_NV)
 void* getDevicePointer(void* data);
+cl_command_queue getOCLQueue(void* device_ptr);
 #endif
 struct mm_info
 {

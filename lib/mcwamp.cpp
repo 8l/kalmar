@@ -46,6 +46,9 @@ accelerator* getAvailableAccelerator()
 void* getDevicePointer(void* data) {
   return DeviceMgr.getDevicePointer(data);
 }
+cl_command_queue getOCLQueue(void* device_ptr) {
+  return DeviceMgr.getOCLQueue(device_ptr);
+}
 #endif
 std::map<cl_kernel, std::vector<cl_event> > kernelEventMap;
 //int mm_info::waitOnKernelsCount = 0;
