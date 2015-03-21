@@ -284,7 +284,10 @@ struct AMPAllocator
     void releaseLock()
     {
       int old_val = m_atomicLock.fetch_sub();
-      assert(old_val >= 1);
+      if( old_val < 1) {
+        printf("releaseLock error!\n");
+        exit(1);
+      }
     };
     void resetLock()
     {
