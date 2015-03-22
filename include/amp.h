@@ -136,7 +136,7 @@ public:
     return *this;
   }
 
-  accelerator& get_accelerator() const { return *_accelerator; }
+  accelerator get_accelerator() const ;
   enum queuing_mode get_queuing_mode() const { return queuing_mode; }
   bool get_is_debug() const { return is_debug; }
   bool get_version() const { return version; }

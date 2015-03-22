@@ -199,6 +199,9 @@ inline bool accelerator_view::operator==(const accelerator_view& other) const {
          queuing_mode == other.queuing_mode &&
          *_accelerator == *other._accelerator;
 }
+inline accelerator accelerator_view::get_accelerator() const {
+ return accelerator(_accelerator->get_device_path());
+}
 
 inline accelerator_view accelerator::get_default_view() const {
   return default_view;
