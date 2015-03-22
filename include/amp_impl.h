@@ -91,6 +91,7 @@ inline accelerator::accelerator(const std::wstring& path) :
         continue;
       supports_cpu_shared_memory = true;
       default_view.is_auto_selection = false;
+      description = L"CPU accelerator";
       break;
     } else {
       std::wstring path_temp = path;
@@ -114,6 +115,23 @@ inline accelerator::accelerator(const std::wstring& path) :
         if (err != CL_SUCCESS)
           continue;
         _device_id = devices[shipped_id];
+        // Populate description for the accelerator
+        { 
+          char str[1024] = {0x0};
+          std::string s;
+          clGetDeviceInfo(_device_id, CL_DEVICE_VENDOR, 1024, str, NULL);
+          s += str;
+          s += "  ";
+          clGetDeviceInfo(_device_id, CL_DEVICE_NAME, 1024, str, NULL);
+          s += str;
+          s += " (Board Name: ";
+#ifdef CL_DEVICE_BOARD_NAME_AMD
+          clGetDeviceInfo(_device_id, CL_DEVICE_BOARD_NAME_AMD, 1024, str, NULL);
+          s += str;
+#endif
+          s += ")";
+          description.assign(s.begin(), s.end());
+        }
         supports_cpu_shared_memory = false;
         default_view.is_auto_selection = false;
         break;
