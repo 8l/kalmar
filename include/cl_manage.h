@@ -69,7 +69,8 @@ struct AMPAllocator
     }
 
     AMPAllocator(cl_device_id a_device, std::wstring a_device_path)
-      : device(a_device), program(NULL), m_maxCommandQueuePerDevice(QUEUE_SIZE) {
+      : device(a_device), program(NULL), m_maxCommandQueuePerDevice(QUEUE_SIZE),
+        _accelerator(accelerator(a_device_path)) {
         int i;
         cl_int           err;
         context = clCreateContext(0, 1, &device, NULL, NULL, &err);
@@ -150,7 +151,6 @@ struct AMPAllocator
       Clid2DimSizeMap[device] = d;
 
       resetLock();
-      _accelerator = accelerator(a_device_path);
       assert (_accelerator.get_device_id() == a_device);
     }
     void init(void *data, int count) {
