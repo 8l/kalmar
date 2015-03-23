@@ -195,8 +195,9 @@ public:
             _accs.push_back(*_cpu_accelerator);
         clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_GPU, 1024, devices, &deviceCount);
         for (int j = 0; j < deviceCount; j++) {
-            accelerator gpuacc = accelerator(L"gpu" + std::to_wstring(j));
-            _accs.push_back(gpuacc);
+            // FIXME: Will fix leak
+            accelerator* gpuacc = new accelerator(L"gpu" + std::to_wstring(j));
+            _accs.push_back(*gpuacc);
         }
     }
 #else
@@ -275,7 +276,7 @@ public:
   bool supports_cpu_shared_memory;
   size_t dedicated_memory;
   access_type default_access_type;
-  accelerator_view default_view;
+  std::shared_ptr<accelerator_view> default_view;
   // CLAMP-specific
 #if !defined(CXXAMP_ENABLE_HSA)
   cl_device_id _device_id;

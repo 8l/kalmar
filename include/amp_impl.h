@@ -49,7 +49,7 @@ inline accelerator::accelerator(const std::wstring& path) :
   supports_cpu_shared_memory(false), // constructor will set it
   dedicated_memory(0), // constructor will set it
   default_access_type(access_type_none),
-  default_view( accelerator_view(this, false))
+  default_view(new accelerator_view(this, false))
     {
 #if !defined(CXXAMP_ENABLE_HSA)
   device_path = path;
@@ -73,7 +73,6 @@ inline accelerator::accelerator(const std::wstring& path) :
   }
   cl_int err;
   cl_uint platformCount;
-  //cl_device_id device;
   cl_ulong memAllocSize;
   cl_device_fp_config singleFPConfig;
   std::unique_ptr<cl_platform_id[]> platforms;
@@ -90,7 +89,7 @@ inline accelerator::accelerator(const std::wstring& path) :
       if (err != CL_SUCCESS)
         continue;
       supports_cpu_shared_memory = true;
-      default_view.is_auto_selection = false;
+      default_view->is_auto_selection = false;
       description = L"CPU accelerator";
       break;
     } else {
@@ -133,7 +132,7 @@ inline accelerator::accelerator(const std::wstring& path) :
           description.assign(s.begin(), s.end());
         }
         supports_cpu_shared_memory = false;
-        default_view.is_auto_selection = false;
+        default_view->is_auto_selection = false;
         break;
       }
     }
@@ -204,7 +203,7 @@ inline accelerator accelerator_view::get_accelerator() const {
 }
 
 inline accelerator_view accelerator::get_default_view() const {
-  return default_view;
+  return *default_view;
 }
 
 // Accelerator view
