@@ -122,7 +122,9 @@ class completion_future;
 class accelerator;
 template <typename T, int N> class array_view;
 template <typename T, int N> class array;
+// CLAMP-Specific
 extern accelerator* getAvailableAccelerator();
+// END CLAMP-Specific
 class accelerator_view {
 public:
   accelerator_view() = delete;
@@ -136,7 +138,7 @@ public:
     return *this;
   }
 
-  accelerator get_accelerator() const ;
+  accelerator get_accelerator() const;
   enum queuing_mode get_queuing_mode() const { return queuing_mode; }
   bool get_is_debug() const { return is_debug; }
   bool get_version() const { return version; }
@@ -230,11 +232,9 @@ public:
   // For all other purposes, the accelerator_view returned by get_auto_selection_view
   // behaves the same as the default accelerator_view of the default accelerator
   static accelerator_view get_auto_selection_view() {
-    // TODO: to avoid frequent peer-to-peer copying, can we just reuse array_view's acc?
 #if defined(CXXAMP_ENABLE_HSA)
     return _gpu_accelerator->get_default_view();
 #else
-    //FIXME: set auto_select flag
     return accelerator_view(NULL, true);
 #endif
   }
@@ -258,10 +258,9 @@ public:
   access_type get_default_cpu_access_type() const;
   bool operator==(const accelerator& other) const;
   bool operator!=(const accelerator& other) const;
-
   // CLAMP-specific
 #if !defined(CXXAMP_ENABLE_HSA)
-  cl_device_id get_device_id() const { return _device_id;}
+  cl_device_id get_device_id() const { return _device_id; }
 #endif
   // END of CLAMP-specific
  private:
@@ -276,14 +275,13 @@ public:
   bool supports_cpu_shared_memory;
   size_t dedicated_memory;
   access_type default_access_type;
-  std::shared_ptr<accelerator_view> default_view;
   // CLAMP-specific
 #if !defined(CXXAMP_ENABLE_HSA)
   cl_device_id _device_id;
   static std::vector<accelerator> _accs;
 #endif
   // END of CLAMP-specific
-
+  std::shared_ptr<accelerator_view> default_view;
   // static class members
   static std::shared_ptr<accelerator> _default_accelerator; // initialized as nullptr
 #if defined(CXXAMP_ENABLE_HSA)
@@ -2460,22 +2458,6 @@ void copy(InputIter srcBegin, const array_view<T, 1>& dest) {
         ++srcBegin;
     }
 }
-#if 0//CXXAMP_NV
-// Extend for data copying from raw pointer
-template <typename T>
-void copy(T* srcBegin, const array_view<T, 1>& dest) {
-    // TODO: how to determine if dest is not accessible on host (write-only)
-    cl_mem dm = static_cast<cl_mem>(getAllocator().device_data(dest.data()));
-    if(dm)
-      clEnqueueWriteBuffer(getAllocator().getQueue(), dm, CL_TRUE, 0,
-                           dest.get_extent()[0]*sizeof(T), srcBegin, 0, NULL, NULL);
-    // FIXME: The codes are needed for now. Will remove host2host copying later
-    for (int i = 0; i < dest.get_extent()[0]; ++i) {
-        reinterpret_cast<T&>(dest[i]) = *srcBegin;
-        ++srcBegin;
-    }
-}
-#endif
 template <typename InputIter, typename T, int N>
 void copy(InputIter srcBegin, const array_view<T, N>& dest) {
     int adv = dest.get_extent().size() / dest.get_extent()[0];
@@ -2508,22 +2490,6 @@ void copy(const array_view<T, 1> &src, OutputIter destBegin) {
         destBegin++;
     }
 }
-#if 0//CXXAMP_NV
-// Extend for copying to raw pointer
-template <typename T>
-void copy(const array_view<T, 1> &src, T* destBegin) {
-    // TODO: how to determine if dest is not accessible on host (write-only)
-    cl_mem dm = static_cast<cl_mem>(getAllocator().device_data(src.data()));
-    if(dm)
-      clEnqueueReadBuffer(getAllocator().getQueue(), dm, CL_TRUE, 0,
-                          src.get_extent()[0]*sizeof(T), destBegin, 0, NULL, NULL);
-    // FIXME: The codes are needed for now. Will remove host2host copying later
-    for (int i = 0; i < src.get_extent()[0]; ++i) {
-        *destBegin = (src.get_data(i));
-        destBegin++;
-    }
-}
-#endif
 template <typename OutputIter, typename T, int N>
 void copy(const array_view<T, N> &src, OutputIter destBegin) {
     int adv = src.get_extent().size() / src.get_extent()[0];

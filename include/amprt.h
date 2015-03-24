@@ -131,7 +131,6 @@ public:
     } while(!avail);
     
     assert (did != NULL);
-
     return did;
   }
 

@@ -35,8 +35,10 @@ inline accelerator::accelerator(const accelerator& other) :
   supports_cpu_shared_memory(other.supports_cpu_shared_memory),
   dedicated_memory(other.dedicated_memory),
   default_access_type(other.default_access_type),
-  default_view(other.default_view),
-  _device_id(other._device_id)
+#if !defined(CXXAMP_ENABLE_HSA)
+  _device_id(other._device_id),
+#endif
+  default_view(other.default_view)
   {}
 inline accelerator::accelerator(const std::wstring& path) :
   version(0), 
@@ -49,7 +51,15 @@ inline accelerator::accelerator(const std::wstring& path) :
   supports_cpu_shared_memory(false), // constructor will set it
   dedicated_memory(0), // constructor will set it
   default_access_type(access_type_none),
+#if !defined(CXXAMP_ENABLE_HSA)
   default_view(new accelerator_view(this, false))
+#else
+ default_view( (device_path == std::wstring(gpu_accelerator)) ?
+          ( (_gpu_accelerator != nullptr) ?
+            new accelerator_view(_gpu_accelerator.get()) : new accelerator_view(this)) :
+          ( (_cpu_accelerator != nullptr) ?
+            new accelerator_view(_cpu_accelerator.get()) : new accelerator_view(this)) )
+#endif
     {
 #if !defined(CXXAMP_ENABLE_HSA)
   device_path = path;

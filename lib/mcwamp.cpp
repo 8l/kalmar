@@ -30,7 +30,6 @@ std::shared_ptr<accelerator> accelerator::_default_accelerator = std::make_share
 std::vector<accelerator> accelerator::_accs;
 cl_device_id details::DeviceManager::starting_id = NULL;
 std::map<cl_device_id, struct DimMaxSize> Clid2DimSizeMap;
-// Simply extend it to multiple accelerators
 static details::DeviceManager DeviceMgr;
 AMPAllocator* getAllocator(cl_device_id id)
 {
