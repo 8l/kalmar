@@ -43,22 +43,6 @@ extern void AddKernelEventObject(cl_kernel, cl_event);
 extern std::vector<cl_event>& GetKernelEventObject(cl_kernel);
 extern void RemoveKernelEventObject(cl_kernel);
 }
-template <typename T>
-struct AtomCopyable
-{
-  std::atomic<T> _impl;
-  AtomCopyable() :_impl() {}
-  AtomCopyable(const std::atomic<T> &other) :_impl(other.load()) {}
-  AtomCopyable(const AtomCopyable &other) :_impl(other._impl.load()) {}
-  AtomCopyable &operator=(const AtomCopyable &other) {
-    _impl.store(other._impl.load());
-  }
-  // llvm.org/viewvc/llvm-project?view=revision&revision=183033
-  T fetch_add() { return _impl.fetch_add(1); };
-  T fetch_sub() { return _impl.fetch_sub(1); };
-  std::atomic<T> &get() { return _impl; }
-};
-
 struct AMPAllocator
 {
     inline cl_command_queue getQueue() {
@@ -273,26 +257,24 @@ struct AMPAllocator
         clReleaseContext(context);
     }
     bool tryLock() {
-      int old_val = m_atomicLock.fetch_add();
+      int old_val = m_atomicLock.fetch_add(1);
       if ((old_val+1) <= m_maxCommandQueuePerDevice) {
         return true;
       } else {
-        m_atomicLock.fetch_sub();
+        m_atomicLock.fetch_sub(1);
         return false;
       }
     }
-    void releaseLock()
-    {
-      int old_val = m_atomicLock.fetch_sub();
-      if( old_val < 1) {
+    void releaseLock() {
+      int old_val = m_atomicLock.fetch_sub(1);
+      if( old_val < 1 || old_val > m_maxCommandQueuePerDevice) {
         printf("releaseLock error!\n");
         exit(1);
       }
-    };
-    void resetLock()
-    {
-      (m_atomicLock.get()).store(0); 
-    };
+    }
+    void resetLock() {
+      m_atomicLock.store(0);
+    }
     Concurrency::accelerator* get_accelerator() {
       return &_accelerator;
     }
@@ -305,7 +287,7 @@ struct AMPAllocator
 #if defined(CXXAMP_NV)
     std::map<void *, rw_info> rwq;
 #endif
-    AtomCopyable<int> m_atomicLock;
+    std::atomic<int> m_atomicLock;
     int m_maxCommandQueuePerDevice;
     Concurrency::accelerator _accelerator;
 };
