@@ -126,7 +126,7 @@ inline accelerator::accelerator(const std::wstring& path) :
           continue;
         if (shipped_id >= deviceCount) {
           std::wcout << L"!!1Try to construct accelerator = " << path 
-            << L" on a " << deviceCount << L"-GPUs machine (index starting from 0)\n";
+            << L" on a " << deviceCount << L"-GPU(s) machine (index starting from 0)\n";
           throw runtime_exception("errorMsg_throw", 0);
         }
         _device_id = devices[shipped_id];

@@ -57,9 +57,8 @@ int main() {
  }
   
   // Construct gpu0-gpuN
- if (1)
  {
-  for (int i = 1; i < num; i++) {
+  for (int i = 0; i < num; i++) {
     accelerator device = accelerator(L"gpu" + std::to_wstring(i)) ;
     auto iter = std::find(ids.begin(), ids.end(), device.get_device_id());
     if (iter == ids.end()) {
