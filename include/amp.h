@@ -1873,14 +1873,14 @@ public:
       return extent;
   }
   accelerator_view get_source_accelerator_view() const {
-    if (1) {
-      // FIXME: Since we always have two codes: CPU and AMP, device buffer is always pre-allocated.
-      // Return AMP's accelerator_view
-      return getAllocator(cache.device_id())->get_accelerator()->get_default_view();
+    // FIXME: Since we always have two codes: CPU and AMP, device buffer is always pre-allocated.
+    // Return AMP's accelerator_view
+    std::vector<accelerator> accs = accelerator::get_all();
+    for (auto &acc : accs) {
+      if (cache.device_id() == acc.get_device_id())
+        return acc.get_default_view();
     }
-    else {
-      throw runtime_exception("Cannot query source accelerator_view for an array_view without a data source.", 0);
-    }
+    throw runtime_exception("Cannot query source accelerator_view for an array_view without a data source.", 0);
   }
   __global T& operator[](const index<N>& idx) const restrict(amp,cpu) {
 #ifndef __GPU__
@@ -2130,14 +2130,14 @@ public:
   //       the accelerator_view where the source array is located.
   // (3) If the array_view does not have a data source, this API throws a runtime_exception
   accelerator_view get_source_accelerator_view() const {
-    if (1) {
-      // FIXME: Since we always have two codes: CPU and AMP, device buffer is always pre-allocated.
-      // Return AMP's accelerator_view
-      return getAllocator(cache.device_id())->get_accelerator()->get_default_view();
+    // FIXME: Since we always have two codes: CPU and AMP, device buffer is always pre-allocated.
+    // Return AMP's accelerator_view
+    std::vector<accelerator> accs = accelerator::get_all();
+    for (auto &acc : accs) {
+      if (cache.device_id() == acc.get_device_id())
+        return acc.get_default_view();
     }
-    else {
-      throw runtime_exception("Cannot query source accelerator_view for an array_view without a data source.", 0);
-    }
+    throw runtime_exception("Cannot query source accelerator_view for an array_view without a data source.", 0);
   }
 
   __global const T& operator[](const index<N>& idx) const restrict(amp,cpu) {
