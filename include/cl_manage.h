@@ -52,9 +52,8 @@ struct AMPAllocator
         return ret;
     }
 
-    AMPAllocator(cl_device_id a_device, std::wstring a_device_path)
-      : device(a_device), program(NULL), m_maxCommandQueuePerDevice(QUEUE_SIZE),
-        _accelerator(accelerator(a_device_path)) {
+    AMPAllocator(cl_device_id a_device)
+      : device(a_device), program(NULL), m_maxCommandQueuePerDevice(QUEUE_SIZE) {
         int i;
         cl_int           err;
         context = clCreateContext(0, 1, &device, NULL, NULL, &err);
@@ -135,7 +134,6 @@ struct AMPAllocator
       Clid2DimSizeMap[device] = d;
 
       resetLock();
-      assert (_accelerator.get_device_id() == a_device);
     }
     void init(void *data, int count) {
         auto iter = mem_info.find(data);
@@ -275,9 +273,7 @@ struct AMPAllocator
     void resetLock() {
       m_atomicLock.store(0);
     }
-    Concurrency::accelerator* get_accelerator() {
-      return &_accelerator;
-    }
+
     std::map<void *, amp_obj> mem_info;
     cl_context       context;
     cl_device_id     device;
@@ -289,7 +285,6 @@ struct AMPAllocator
 #endif
     std::atomic<int> m_atomicLock;
     int m_maxCommandQueuePerDevice;
-    Concurrency::accelerator _accelerator;
 };
 
 AMPAllocator* getAllocator(cl_device_id id);

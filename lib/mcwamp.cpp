@@ -35,11 +35,11 @@ AMPAllocator* getAllocator(cl_device_id id)
 {
   return DeviceMgr.getAllocator(id);
 }
-accelerator* getAvailableAccelerator()
+namespace CLAMP {
+cl_device_id getAvailableAccelerator()
 {
-  AMPAllocator* amp = DeviceMgr.getAllocator(DeviceMgr.getAvailableDevice());
-  assert(amp);
-  return amp->get_accelerator();
+  return DeviceMgr.getAvailableDevice();
+}
 }
 #if defined(CXXAMP_NV)
 void* getDevicePointer(void* data) {

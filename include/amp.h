@@ -122,9 +122,6 @@ class completion_future;
 class accelerator;
 template <typename T, int N> class array_view;
 template <typename T, int N> class array;
-// CLAMP-Specific
-extern accelerator* getAvailableAccelerator();
-// END CLAMP-Specific
 class accelerator_view {
 public:
   accelerator_view() = delete;

@@ -60,8 +60,7 @@ public:
           gpuCount++;
           std::wstring path = L"gpu" + std::to_wstring(j);
           m_allocators.insert(std::pair<cl_device_id, AMPAllocator*>(
-                           devices[j], new Concurrency::AMPAllocator(devices[j], path)));
-          m_ids.insert(std::pair<int, cl_device_id>(j, devices[j]));
+                           devices[j], new Concurrency::AMPAllocator(devices[j])));
         }
       }
     }
@@ -89,11 +88,11 @@ public:
   AMPAllocator* getAllocator(cl_device_id id) {
     auto iter = m_allocators.find(id);
     if (iter != std::end(m_allocators)) {
-      return iter->second;
-    } else {
-      printf("No such device, id = %p, exit\n", id);
-      exit(1);
+      if(iter->second)
+        return iter->second;
     }
+    printf("No such device, id = %p, exit\n", id);
+    exit(1);
   }
 #if defined(CXXAMP_NV)
   void* getDevicePointer(void* data) {
@@ -137,7 +136,6 @@ public:
 private:
   int m_count;
   std::map<cl_device_id, AMPAllocator*> m_allocators;
-  std::map<int, cl_device_id> m_ids;
 
 public:
   static cl_device_id starting_id; // the very first GPU device

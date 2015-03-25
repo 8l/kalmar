@@ -27,6 +27,7 @@ extern void MatchKernelNames( std::string & );
 extern void CompileKernels(cl_program& program, cl_context& context, cl_device_id& device);
 extern cl_kernel GetKernelObject(cl_program& prog, std::string& name);
 extern void AddKernelEventObject(cl_kernel, cl_event);
+extern cl_device_id getAvailableAccelerator();
 }
 static inline std::string mcw_cxxamp_fixnames(char *f) restrict(cpu) {
     std::string s(f);
@@ -95,7 +96,7 @@ static inline void mcw_cxxamp_launch_kernel(size_t *ext,
   cl_int err;
   // TODO: all captured array_views and arrays shall be located on the same accelerator
   AMPAllocator* aloc = getAllocator(accl_view.get_is_auto_selection()?
-                                   Concurrency::getAvailableAccelerator()->get_device_id():
+                                   CLAMP::getAvailableAccelerator():
                                    accl_view.get_accelerator().get_device_id());
   CLAMP::CompileKernels(aloc->program, aloc->context, aloc->device);
   int* foo = reinterpret_cast<int*>(&Kernel::__cxxamp_trampoline);
