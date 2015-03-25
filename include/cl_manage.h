@@ -273,7 +273,8 @@ struct AMPAllocator
     void resetLock() {
       m_atomicLock.store(0);
     }
-
+    // FIXME: Position matters
+    std::atomic<int> m_atomicLock;
     std::map<void *, amp_obj> mem_info;
     cl_context       context;
     cl_device_id     device;
@@ -283,7 +284,6 @@ struct AMPAllocator
 #if defined(CXXAMP_NV)
     std::map<void *, rw_info> rwq;
 #endif
-    std::atomic<int> m_atomicLock;
     int m_maxCommandQueuePerDevice;
 };
 
