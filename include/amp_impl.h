@@ -114,15 +114,21 @@ inline accelerator::accelerator(const std::wstring& path) :
       if (acc_type == std::wstring(gpu_accelerator)) {
         #ifndef __GPU__
         if (path_temp.substr(3,path_temp.length()).empty()) {
-          std::wcout << "Unsupported device path =  " << path << "\n";
+          std::wcout << L"Unsupported device path =  " << path << L"\n";
           throw runtime_exception("errorMsg_throw", 0);
         }
         #endif
         int shipped_id = std::stoi(path_temp.substr(3,path_temp.length()));
         cl_device_id devices[1024];
-        err = clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_GPU, 1024, devices, NULL);
+        cl_uint deviceCount = 0;
+        err = clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_GPU, 1024, devices, &deviceCount);
         if (err != CL_SUCCESS)
           continue;
+        if (shipped_id >= deviceCount) {
+          std::wcout << L"!!1Try to construct accelerator = " << path 
+            << L" on a " << deviceCount << L"-GPUs machine (index starting from 0)\n";
+          throw runtime_exception("errorMsg_throw", 0);
+        }
         _device_id = devices[shipped_id];
         // Populate description for the accelerator
         { 
@@ -150,6 +156,8 @@ inline accelerator::accelerator(const std::wstring& path) :
   if (i == platformCount)
       return;
   // We should construct accelerator for any path specified at this point
+  // If not, check the given path is correct or not, for example, 
+  // try to construct L"gpu2" on a 1-GPU machine
   assert(_device_id);
   err = clGetDeviceInfo(_device_id, CL_DEVICE_MAX_MEM_ALLOC_SIZE, sizeof(cl_ulong), &memAllocSize, NULL);
   assert(err == CL_SUCCESS);
