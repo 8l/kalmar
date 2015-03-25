@@ -398,7 +398,7 @@ public:
         : p_(d.p_), _device_id(d._device_id) {}
     template <typename U>
         _data(const _data<U>& d) restrict(cpu, amp)
-        : p_(reinterpret_cast<T *>(d.get())), _device_id(d.device_id) {}
+        : p_(reinterpret_cast<T *>(d.get())), _device_id(d.device_id()) {}
     __attribute__((annotate("user_deserialize")))
         explicit _data(__global T* t) restrict(cpu, amp) { p_ = t; }
     __global T* get(void) const restrict(cpu, amp) { return p_; }
