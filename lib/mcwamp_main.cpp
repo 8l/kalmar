@@ -94,7 +94,7 @@ void prefix(void) {
 // Compiling as a shared library
 void shared(void) {
 #ifndef __APPLE__
-    std::cout << " -shared -fPIC -Wl,-Bsymbolic ";
+    std::cout << " -shared -fPIC";
 #else
 #error Does not support Mac OS X
 #endif
