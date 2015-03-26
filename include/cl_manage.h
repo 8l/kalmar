@@ -43,6 +43,9 @@ extern void AddKernelEventObject(cl_kernel, cl_event);
 extern std::vector<cl_event>& GetKernelEventObject(cl_kernel);
 extern void RemoveKernelEventObject(cl_kernel);
 }
+// Forward declaration
+struct AMPAllocator;
+AMPAllocator* getAllocator(cl_device_id id);
 struct AMPAllocator
 {
     inline cl_command_queue getQueue() {
@@ -246,6 +249,46 @@ struct AMPAllocator
         #endif
       }
     }
+    void tryMoveTo(void* data, cl_device_id target) {
+      #ifdef TRANSPARENT_DATA_MANAGEMENT
+      auto iter = mem_info.find(data);
+      if (target != device && iter!=std::end(mem_info)) {
+        int count = iter->second.count;
+        // peer to peer happens here
+        // (1) Get target AMPAllocator
+        AMPAllocator* DestAllocator = Concurrency::getAllocator(target);
+        assert(DestAllocator);
+        // Create new clBuffer in target AMPAllocator
+        DestAllocator->init(data, count);
+
+        // Copy from resident to target
+        // TODO: Will replace with peer-to-peer copy routine
+        {
+          // (1) gpuMemcpyDeviceToHost
+          cl_int err;
+          void* srcDevicePointer = device_data(data);
+          err = clEnqueueReadBuffer(getQueue(),
+                                    static_cast<cl_mem>(srcDevicePointer), CL_TRUE, 0,
+                                    count, data, 0, NULL, NULL);
+          if (err != CL_SUCCESS) {
+            printf("Read error = %d\n", err);
+            exit(1);
+          }
+          // (2) gpuMemcpyHostToDevice
+          void* destDevicePointer = DestAllocator->device_data(data);
+          err = clEnqueueWriteBuffer(DestAllocator->getQueue(),
+                                     static_cast<cl_mem>(destDevicePointer), CL_TRUE, 0,
+                                     count, data, 0, NULL, NULL);
+          if (err != CL_SUCCESS) {
+            printf("Write error = %d\n", err);
+            exit(1);
+          }
+        }
+        // Free clBuffer in src AMPAllocator
+        free(data);
+      }
+    #endif
+    }
     ~AMPAllocator() {
         if (program)
           clReleaseProgram(program);
@@ -287,7 +330,6 @@ struct AMPAllocator
     int m_maxCommandQueuePerDevice;
 };
 
-AMPAllocator* getAllocator(cl_device_id id);
 #if defined(CXXAMP_NV)
 void* getDevicePointer(void* data);
 cl_command_queue getOCLQueue(void* device_ptr);
