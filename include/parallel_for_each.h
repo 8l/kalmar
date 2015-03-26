@@ -103,7 +103,8 @@ static inline void mcw_cxxamp_launch_kernel(size_t *ext,
   std::string transformed_kernel_name =
       mcw_cxxamp_fixnames(f.__cxxamp_trampoline_name());
   cl_kernel kernel = CLAMP::GetKernelObject(aloc->program, transformed_kernel_name);
-  Concurrency::Serialize s(kernel);
+  // Notify serializer the target device
+  Concurrency::Serialize s(kernel, aloc->device);
   f.__cxxamp_serialize(s);
   {
       // C++ AMP specifications

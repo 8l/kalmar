@@ -28,18 +28,20 @@ class Serialize {
     CLAMP::HSAPushPointer(k_, const_cast<void*>(ptr));
   }
 #else
-  Serialize(cl_kernel k): k_(k), current_idx_(0) {}
+  Serialize(cl_kernel k, cl_device_id target): k_(k), current_idx_(0), device(target) {}
   void Append(size_t sz, const void *s) {
     cl_int err;
     err = clSetKernelArg(k_, current_idx_++, sz, s);
     assert(err == CL_SUCCESS);
   }
   cl_kernel getKernel() { return k_; }
+  cl_device_id getDevice() { return device; }
 #endif
  private:
 #if defined(CXXAMP_ENABLE_HSA)
   hsa_kernel k_;
 #else
+  cl_device_id device;  // target device of pfe
   cl_kernel k_;
 #endif
   int current_idx_;
