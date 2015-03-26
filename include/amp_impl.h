@@ -728,7 +728,11 @@ array_view<T, N>::array_view(const Concurrency::extent<N>& ext,
     #else
       cache(ext.size(), src, Concurrency::details::DeviceManager::starting_device()),
     #endif
-      offset(0) {}
+      offset(0) {
+  #ifndef __GPU__
+  this->init();
+  #endif
+}
 
 // Constructs an array_view which is not bound to a data source
 template <typename T, int N>
@@ -739,7 +743,11 @@ array_view<T, N>::array_view(const Concurrency::extent<N>& ext) restrict(amp,cpu
     #else
       cache(ext.size(), Concurrency::details::DeviceManager::starting_device()),
     #endif
-      offset(0) {}
+      offset(0) {
+  #ifndef __GPU__
+  this->init();
+  #endif
+}
 
 template <typename T, int N>
 void array_view<T, N>::refresh() const {
@@ -783,7 +791,11 @@ array_view<const T, N>::array_view(const Concurrency::extent<N>& ext,
 #else
     cache(ext.size(), const_cast<nc_T*>(src), Concurrency::details::DeviceManager::starting_device()),
 #endif
-     offset(0) {}
+     offset(0) {
+#ifndef __GPU__
+  this->init();
+#endif
+}
 
 template <typename T, int N>
 void array_view<const T, N>::refresh() const {

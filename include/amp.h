@@ -1377,6 +1377,12 @@ public:
       throw runtime_exception(__errorMsg_UnsupportedAccelerator, E_FAIL);
     }    
 */
+    if (!m_arr)
+      return;
+    array<T, N>* arr = static_cast<array<T, N>* >(m_arr);
+    cl_device_id device = arr->get_accelerator_view().get_accelerator().get_device_id();
+    // User get() to avoid sync
+    Concurrency::getAllocator(device)->tryMoveTo(arr->get(), s.getDevice());
   }
 private:
   void* m_arr;
@@ -1750,6 +1756,11 @@ public:
 #endif
     return reinterpret_cast<T*>(m_device.get());
   }
+  // CLAMP-Specific
+  T* get() const restrict(amp,cpu) {
+    return reinterpret_cast<T*>(m_device.get());
+  }
+  // End of CLAMP-Specific
   ~array() {
     if(pav) delete pav;
     if(paav) delete paav;
@@ -1780,6 +1791,30 @@ private:
 };
 
 template <typename T, int N = 1>
+class array_view_trace {
+public:
+  typedef Concurrency::array_view< T, N > _Type;
+  __attribute__((annotate("user_deserialize")))
+  array_view_trace() restrict(cpu, amp) : Container(NULL) {}
+
+  void set(_Type* other) restrict(cpu) { Container = other; }
+
+  __attribute__((annotate("serialize")))
+  void __cxxamp_serialize(Serialize& s) const {
+    if (!Container)
+      return;
+    _Type* self = static_cast<_Type*>(Container);
+    // Current device
+    cl_device_id device = self->get_source_accelerator_view().get_accelerator().get_device_id();
+    // Use get() to avoid sync
+    Concurrency::getAllocator(device)->tryMoveTo(self->get(), s.getDevice());
+  }
+
+private:
+  void* Container;
+};
+
+template <typename T, int N = 1>
 class array_view
 {
   static_assert(0 == (sizeof(T) % sizeof(int)), "only value types whose size is a multiple of the size of an integer are allowed in array views");
@@ -1790,6 +1825,7 @@ public:
 #else
   typedef _data_host<T> cl_buffer_t;
 #endif
+  typedef array_view_trace<T, N> arrayview_trace;
 
   static const int rank = N;
   typedef T value_type;
@@ -1799,7 +1835,11 @@ public:
 
   array_view(array<T, N>& src) restrict(amp,cpu)
       : extent(src.extent), extent_base(src.extent),
-      index_base(), cache(src.internal()), offset(0) {}
+      index_base(), cache(src.internal()), offset(0) {
+    #ifndef __GPU__
+    this->init();
+    #endif
+  }
 
   template <typename Container, class = typename std::enable_if<!std::is_array<Container>::value>::type>
       array_view(const Concurrency::extent<N>& extent, Container& src)
@@ -1844,7 +1884,11 @@ public:
 
    array_view(const array_view& other) restrict(amp,cpu) : extent(other.extent),
     extent_base(other.extent_base), index_base(other.index_base),
-    cache(other.cache), offset(other.offset) {}
+    cache(other.cache), offset(other.offset) {
+      #ifndef __GPU__
+      this->init();
+      #endif
+    }
   array_view& operator=(const array_view& other) restrict(amp,cpu) {
       if (this != &other) {
           extent = other.extent;
@@ -1853,6 +1897,9 @@ public:
           extent_base = other.extent_base;
           offset = other.offset;
       }
+      #ifndef __GPU__
+      this->init();
+      #endif
       return *this;
   }
   void copy_to(array<T,N>& dest) const {
@@ -2007,7 +2054,12 @@ public:
     static_assert(N == 1, "data() is only permissible on array views of rank 1");
     return reinterpret_cast<T*>(cache.get() + offset + index_base[0]);
   }
-
+  // CLAMP-Specific
+  T* get() const restrict(amp,cpu) {
+    static_assert(N == 1, "get() is only permissible on array views of rank 1");
+    return reinterpret_cast<T*>(cache.get() + offset + index_base[0]);
+  }
+  // End of CLAMP-Specific
 private:
   template <int K, typename Q> friend struct index_helper;
   template <int K, typename Q1, typename Q2> friend struct amp_helper;
@@ -2015,7 +2067,11 @@ private:
   template <typename K, int Q> friend struct array_projection_helper;
   template <typename Q, int K> friend class array;
   template <typename Q, int K> friend class array_view;
+  template <typename K, int Q> friend class array_view_trace;
 
+  #ifndef __GPU__
+  void init() { m_trace.set(this); }
+  #endif
   // used by view_as and reinterpret_as
   array_view(const Concurrency::extent<N>& ext, const cl_buffer_t& cache,
              int offset) restrict(amp,cpu)
@@ -2033,6 +2089,7 @@ private:
   Concurrency::index<N> index_base;
   cl_buffer_t cache;
   int offset;
+  arrayview_trace m_trace;
 };
 
 template <typename T, int N>
@@ -2254,6 +2311,12 @@ public:
     static_assert(N == 1, "data() is only permissible on array views of rank 1");
     return reinterpret_cast<T*>(cache.get() + offset + index_base[0]);
   }
+  // CLAMP-Specific
+  T* get() const restrict(amp,cpu) {
+    static_assert(N == 1, "get() is only permissible on array views of rank 1");
+    return reinterpret_cast<T*>(cache.get() + offset + index_base[0]);
+  }
+  // End of CLAMP-Specific
 private:
   template <int K, typename Q> friend struct index_helper;
   template <int K, typename Q1, typename Q2> friend struct amp_helper;
