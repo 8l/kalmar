@@ -1381,6 +1381,7 @@ public:
       return;
     array<T, N>* arr = static_cast<array<T, N>* >(m_arr);
     cl_device_id device = arr->get_accelerator_view().get_accelerator().get_device_id();
+    assert(Concurrency::getAllocator(device));
     // User get() to avoid sync
     Concurrency::getAllocator(device)->tryMoveTo(arr->get(), s.getDevice());
   }
@@ -1805,6 +1806,7 @@ public:
     // Current device
     cl_device_id device = self->get_source_accelerator_view().get_accelerator().get_device_id();
     // Use get() to avoid sync
+    assert(Concurrency::getAllocator(device));
     Concurrency::getAllocator(device)->tryMoveTo(self->get(), s.getDevice());
   }
 
