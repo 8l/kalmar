@@ -13,8 +13,6 @@
 #include <string.h>
 #include <CL/opencl.h>
 
-#define CXXAMP_SYNC (1)
-
 #if defined(CXXAMP_NV)
 struct rw_info
 {
@@ -28,7 +26,7 @@ struct rw_info
 struct amp_obj
 {
     cl_mem dm;
-    int count;// reference count
+    int refCount;// reference count
 };
 
 #define QUEUE_SIZE (1)
@@ -38,11 +36,6 @@ struct DimMaxSize {
   size_t* maxSizes;
 };
 extern std::map<cl_device_id, struct DimMaxSize> Clid2DimSizeMap;
-namespace CLAMP {
-extern void AddKernelEventObject(cl_kernel, cl_event);
-extern std::vector<cl_event>& GetKernelEventObject(cl_kernel);
-extern void RemoveKernelEventObject(cl_kernel);
-}
 // Forward declaration
 struct AMPAllocator;
 AMPAllocator* getAllocator(cl_device_id id);
@@ -159,7 +152,7 @@ struct AMPAllocator
             #if SYNC_DEBUG
             printf("retain data=%p, device=%p, count=%d\n", data, iter->second.dm,count);
             #endif
-            ++iter->second.count;
+            ++iter->second.refCount;
           }
     }
     void append(Serialize& s, void *data) {
@@ -238,7 +231,7 @@ struct AMPAllocator
 #endif
     void free(void *data) {
       auto iter = mem_info.find(data);
-      if (iter != std::end(mem_info) && --iter->second.count == 0) {
+      if (iter != std::end(mem_info) && --iter->second.refCount == 0) {
         #ifdef SYNC_DEBUG
         printf("Release mem data=%p, dm=%p\n", data, iter->second.dm);
         #endif
@@ -251,13 +244,13 @@ struct AMPAllocator
         #endif
       }
     }
-    void tryMoveTo(Serialize& s, void* data) {
+    bool tryMoveTo(Serialize& s, void* data) {
       #ifdef TRANSPARENT_DATA_MANAGEMENT
       auto it = rwq.find(data);
+      cl_device_id target = s.getDevice();
       if (target != device && it!=std::end(rwq)) {
         rw_info& rw = it->second;
         int count = rw.count;
-        cl_device_id target = s.getDevice();
         // peer to peer happens here
         // (1) Get target AMPAllocator
         AMPAllocator* DestAllocator = Concurrency::getAllocator(target);
@@ -287,22 +280,15 @@ struct AMPAllocator
             printf("Write error = %d\n", err);
             exit(1);
           }
-          // Set kernel argument on target
-          DestAllocator->append(s,data);
           if (it->second.discard == true)
             DestAllocator->discard(data);
         }
         // Free clBuffer in src AMPAllocator
         free(data);
-      } else {
-        // Set kernel argument on currrent
-        // TODO: not good for now
-        //append(s,data);
+        return true;
       }
-    #else
-    // TODO: not good for now
-    //append(s, data);
     #endif
+      return false;
     }
     ~AMPAllocator() {
         if (program)
@@ -356,18 +342,18 @@ struct mm_info
     bool discard;
     bool sync;
     bool free;
+    bool has_data_source;
     cl_device_id _device_id;
-    //static int waitOnKernelsCount;
     mm_info(int count, cl_device_id device_id)
-      : data(aligned_alloc(0x1000, count)), discard(false), free(true) {
+      : data(aligned_alloc(0x1000, count)), discard(false), free(true),
+        has_data_source(false), _device_id(device_id) {
       assert(device_id);
-      _device_id = device_id;
       getAllocator(_device_id)->init(data, count);
     }
     mm_info(int count, void *src, cl_device_id device_id)
-      : data(src), discard(false), free(false) {
+      : data(src), discard(false), free(false),
+        has_data_source(true), _device_id(device_id) {
       assert(device_id);
-      _device_id = device_id;
       getAllocator(_device_id)->init(data, count);
     }
     void synchronize() {
@@ -394,8 +380,6 @@ struct mm_info
         }
       }
       #endif
-      //printf("mm_info::synchronize() : %d\n", ++waitOnKernelsCount);
-      waitOnKernels();
     }
     void refresh() {}
     void* get() { return data; }
@@ -409,39 +393,22 @@ struct mm_info
       #ifdef SYNC_DEBUG
       printf("serialize, data=%p\n",data);
       #endif
-      #if !CXXAMP_SYNC
-      serializedKernel.push_back(s.getKernel());
+
+      #ifdef TRANSPARENT_DATA_MANAGEMENT
+      if (getAllocator(_device_id)->tryMoveTo(s, data)) {
+        _device_id = s.getDevice();
+      }
       #endif
       getAllocator(_device_id)->append(s, data);
     }
     ~mm_info() {
-        //printf("mm_info::~mm_info() : %d\n", ++waitOnKernelsCount);
-      waitOnKernels();
       if (!discard)
         synchronize();
       getAllocator(_device_id)->free(data);
       //free = true;
-      if (0) {
+      if (!has_data_source) {
         ::operator delete(data);
       }
-    }
-    void waitOnKernels() {
-        #if !CXXAMP_SYNC
-        // for each kernel, check if it has been finished
-        std::for_each(serializedKernel.begin(), serializedKernel.end(), [](cl_kernel& k) {
-            // get cl_event associated with the kernel
-            std::vector<cl_event>& event_vector = CLAMP::GetKernelEventObject(k);
-            std::for_each(event_vector.begin(), event_vector.end(), [](cl_event& event) {
-                // wait for the event to be completed
-                clWaitForEvents(1, &event);
-
-                clReleaseEvent(event);
-            });
-
-            // wait done, can remove the event object
-            CLAMP::RemoveKernelEventObject(k);
-        });
-       #endif
     }
 };
 

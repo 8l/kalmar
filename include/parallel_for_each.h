@@ -26,7 +26,6 @@ extern std::future<void> HSALaunchKernelAsync(void *ker, size_t, size_t *global,
 extern void MatchKernelNames( std::string & );
 extern void CompileKernels(cl_program& program, cl_context& context, cl_device_id& device);
 extern cl_kernel GetKernelObject(cl_program& prog, std::string& name);
-extern void AddKernelEventObject(cl_kernel, cl_event);
 extern cl_device_id getAvailableAccelerator();
 }
 static inline std::string mcw_cxxamp_fixnames(char *f) restrict(cpu) {
@@ -137,11 +136,7 @@ static inline void mcw_cxxamp_launch_kernel(size_t *ext,
   cl_command_queue queue = aloc->getQueue();
   err = clEnqueueNDRangeKernel( queue, kernel, dim_ext, NULL, ext, local_size, 0, NULL, &kn_event);
   assert(err == CL_SUCCESS);
-  #if !CXXAMP_SYNC 
-  CLAMP::AddKernelEventObject(kernel, kn_event);
-  #endif
 
-  #if CXXAMP_SYNC 
   // Provided the queued kernels are independent, we could flush them
   // We should consider to use multiple queues
   err = clFlush( queue );
@@ -152,7 +147,7 @@ static inline void mcw_cxxamp_launch_kernel(size_t *ext,
       assert(err == CL_SUCCESS);
     }
   }
-  #endif
+
   // Release device lock if specified accelerator_view is automatically selected
   if (accl_view. get_is_auto_selection())
     aloc->releaseLock();

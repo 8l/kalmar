@@ -68,22 +68,6 @@ extern "C" char * kernel_source_end_[] asm ("_binary_kernel_cl_end");
 std::vector<std::string> __mcw_kernel_names;
 namespace Concurrency {
 namespace CLAMP {
-void AddKernelEventObject(cl_kernel kernel, cl_event event) {
-    //printf("AddKernelEventObject %p %p\n", kernel, event);
-    kernelEventMap[kernel].push_back(event);
-    //printf("kernel events: %lu\n", kernelEventMap[kernel].size());
-}
-
-std::vector<cl_event>& GetKernelEventObject(cl_kernel kernel) {
-    //printf("GetKernelEventObject %p\n", kernel);
-    return kernelEventMap[kernel];
-}
-
-void RemoveKernelEventObject(cl_kernel kernel) {
-    //printf("RemoveKernelEventObject %p\n", kernel);
-    kernelEventMap.erase(kernel);
-}
-
 typedef std::map<std::string, cl_kernel> KernelObject;
 std::map<cl_program, KernelObject> Pro2KernelObject;
     static inline void getKernelNames(cl_program& prog) {

@@ -1377,6 +1377,7 @@ public:
       throw runtime_exception(__errorMsg_UnsupportedAccelerator, E_FAIL);
     }    
 */
+#if 0
     if (!m_arr)
       return;
     array<T, N>* arr = static_cast<array<T, N>* >(m_arr);
@@ -1384,6 +1385,7 @@ public:
     assert(Concurrency::getAllocator(device));
     // User get() to avoid sync
     Concurrency::getAllocator(device)->tryMoveTo(s, arr->get());
+#endif
   }
 private:
   void* m_arr;
@@ -1800,6 +1802,7 @@ public:
 
   __attribute__((annotate("serialize")))
   void __cxxamp_serialize(Serialize& s) const {
+#if 0
     if (!Container)
       return;
     _Type* self = static_cast<_Type*>(Container);
@@ -1808,6 +1811,7 @@ public:
     // Use get() to avoid sync
     assert(Concurrency::getAllocator(device));
     Concurrency::getAllocator(device)->tryMoveTo(s, self->get());
+#endif
   }
 
 private:
