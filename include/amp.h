@@ -1773,9 +1773,9 @@ private:
   template <typename K, int Q> friend struct projection_helper;
   template <typename K, int Q> friend struct array_projection_helper;
   template <typename K, int Q> friend class array_helper;
+  array_helper_t m_array_helper;
   cl_buffer_t m_device;
   access_type cpu_access_type;
-  array_helper_t m_array_helper;
   __attribute__((cpu)) accelerator_view *pav, *paav;
 
 #ifndef __GPU__
@@ -2081,9 +2081,9 @@ private:
   Concurrency::extent<N> extent;
   Concurrency::extent<N> extent_base;
   Concurrency::index<N> index_base;
+  arrayview_trace m_trace;
   cl_buffer_t cache;
   int offset;
-  arrayview_trace m_trace;
 };
 
 template <typename T, int N>
@@ -2340,9 +2340,9 @@ private:
   Concurrency::extent<N> extent;
   Concurrency::extent<N> extent_base;
   Concurrency::index<N> index_base;
+  arrayview_trace m_trace;
   cl_buffer_t cache;
   int offset;
-  arrayview_trace m_trace;
 };
 
 #undef __global
