@@ -1383,7 +1383,7 @@ public:
     cl_device_id device = arr->get_accelerator_view().get_accelerator().get_device_id();
     assert(Concurrency::getAllocator(device));
     // User get() to avoid sync
-    Concurrency::getAllocator(device)->tryMoveTo(arr->get(), s.getDevice());
+    Concurrency::getAllocator(device)->tryMoveTo(s, arr->get());
   }
 private:
   void* m_arr;
@@ -1807,7 +1807,7 @@ public:
     cl_device_id device = self->get_source_accelerator_view().get_accelerator().get_device_id();
     // Use get() to avoid sync
     assert(Concurrency::getAllocator(device));
-    Concurrency::getAllocator(device)->tryMoveTo(self->get(), s.getDevice());
+    Concurrency::getAllocator(device)->tryMoveTo(s, self->get());
   }
 
 private:

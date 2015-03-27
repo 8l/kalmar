@@ -18,7 +18,7 @@
 #if defined(CXXAMP_NV)
 struct rw_info
 {
-    int count;
+    int count; // amount in bytes
     bool used;
     bool discard;
     bool ready_to_read;
@@ -28,7 +28,7 @@ struct rw_info
 struct amp_obj
 {
     cl_mem dm;
-    int count;
+    int count;// reference count
 };
 
 #define QUEUE_SIZE (1)
@@ -249,11 +249,13 @@ struct AMPAllocator
         #endif
       }
     }
-    void tryMoveTo(void* data, cl_device_id target) {
+    void tryMoveTo(Serialize& s, void* data) {
       #ifdef TRANSPARENT_DATA_MANAGEMENT
-      auto iter = mem_info.find(data);
-      if (target != device && iter!=std::end(mem_info)) {
-        int count = iter->second.count;
+      auto it = rwq.find(data);
+      if (target != device && it!=std::end(rwq)) {
+        rw_info& rw = it->second;
+        int count = rw.count;
+        cl_device_id target = s.getDevice();
         // peer to peer happens here
         // (1) Get target AMPAllocator
         AMPAllocator* DestAllocator = Concurrency::getAllocator(target);
@@ -283,9 +285,14 @@ struct AMPAllocator
             printf("Write error = %d\n", err);
             exit(1);
           }
+          // Set kernel argument on target
+          DestAllocator->append(s,data);
         }
         // Free clBuffer in src AMPAllocator
         free(data);
+      } else {
+        // Set kernel argument on currrent
+        append(s,data);
       }
     #endif
     }
@@ -471,7 +478,10 @@ public:
     cl_device_id device_id() const { return mm->_device_id; }
     __attribute__((annotate("serialize")))
         void __cxxamp_serialize(Serialize& s) const {
-            mm->serialize(s);
+        // Already replaced by tryMoveTo
+            #if 0
+            //mm->serialize(s);
+            #endif
         }
     __attribute__((annotate("user_deserialize")))
         explicit _data_host(__global T* t);
