@@ -1750,9 +1750,7 @@ public:
       //return reinterpret_cast<T*>(NULL);
     }
     // TODO: accessing to the host pointer shall not force sync. Will fix
-    #if 1
     m_device.synchronize();
-    #endif
 #endif
     return reinterpret_cast<T*>(m_device.get());
   }
@@ -2046,17 +2044,13 @@ public:
   }
   T* data() const restrict(amp,cpu) {
 #ifndef __GPU__
-      // TODO: accessing to the host pointer shall not force sync. Will fix
-      #if 1
       synchronize();
-      #endif
 #endif
     static_assert(N == 1, "data() is only permissible on array views of rank 1");
     return reinterpret_cast<T*>(cache.get() + offset + index_base[0]);
   }
   // CLAMP-Specific
   T* get() const restrict(amp,cpu) {
-    static_assert(N == 1, "get() is only permissible on array views of rank 1");
     return reinterpret_cast<T*>(cache.get() + offset + index_base[0]);
   }
   // End of CLAMP-Specific
@@ -2105,6 +2099,7 @@ public:
 #else
   typedef _data_host<nc_T> cl_buffer_t;
 #endif
+  typedef array_view_trace<const T, N> arrayview_trace;
 
   array_view() = delete;
 
@@ -2313,7 +2308,6 @@ public:
   }
   // CLAMP-Specific
   T* get() const restrict(amp,cpu) {
-    static_assert(N == 1, "get() is only permissible on array views of rank 1");
     return reinterpret_cast<T*>(cache.get() + offset + index_base[0]);
   }
   // End of CLAMP-Specific
@@ -2324,6 +2318,11 @@ private:
   template <typename K, int Q> friend struct array_projection_helper;
   template <typename Q, int K> friend class array;
   template <typename Q, int K> friend class array_view;
+  template <typename K, int Q> friend class array_view_trace;
+
+#ifndef __GPU__
+  void init() { m_trace.set(this); }
+#endif
 
   // used by view_as and reinterpret_as
   array_view(const Concurrency::extent<N>& ext, const cl_buffer_t& cache,
@@ -2343,6 +2342,7 @@ private:
   Concurrency::index<N> index_base;
   cl_buffer_t cache;
   int offset;
+  arrayview_trace m_trace;
 };
 
 #undef __global
