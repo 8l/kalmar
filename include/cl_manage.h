@@ -289,6 +289,8 @@ struct AMPAllocator
           }
           // Set kernel argument on target
           DestAllocator->append(s,data);
+          if (it->second.discard == true)
+            DestAllocator->discard(data);
         }
         // Free clBuffer in src AMPAllocator
         free(data);
