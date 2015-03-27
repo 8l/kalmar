@@ -28,7 +28,7 @@ class Serialize {
     CLAMP::HSAPushPointer(k_, const_cast<void*>(ptr));
   }
 #else
-  Serialize(cl_kernel k, cl_device_id target): k_(k), current_idx_(0), device(target) {}
+  Serialize(cl_kernel k, cl_device_id target): k_(k), device(target), current_idx_(0) {}
   void Append(size_t sz, const void *s) {
     cl_int err;
     err = clSetKernelArg(k_, current_idx_++, sz, s);
