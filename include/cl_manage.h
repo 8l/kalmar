@@ -163,6 +163,8 @@ struct AMPAllocator
           }
     }
     void append(Serialize& s, void *data) {
+        if (mem_info[data].dm == NULL)
+          return;
         s.Append(sizeof(cl_mem), &mem_info[data].dm);
 #if defined(CXXAMP_NV)
         rwq[data].used = true;
@@ -292,8 +294,12 @@ struct AMPAllocator
         free(data);
       } else {
         // Set kernel argument on currrent
-        append(s,data);
+        // TODO: not good for now
+        //append(s,data);
       }
+    #else
+    // TODO: not good for now
+    //append(s, data);
     #endif
     }
     ~AMPAllocator() {
@@ -478,10 +484,7 @@ public:
     cl_device_id device_id() const { return mm->_device_id; }
     __attribute__((annotate("serialize")))
         void __cxxamp_serialize(Serialize& s) const {
-        // Already replaced by tryMoveTo
-            #if 0
-            //mm->serialize(s);
-            #endif
+            mm->serialize(s);
         }
     __attribute__((annotate("user_deserialize")))
         explicit _data_host(__global T* t);
