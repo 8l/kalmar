@@ -41,8 +41,8 @@ class Serialize {
 #if defined(CXXAMP_ENABLE_HSA)
   hsa_kernel k_;
 #else
-  cl_device_id device;  // target device of pfe
   cl_kernel k_;
+  cl_device_id device;  // target device of pfe
 #endif
   int current_idx_;
 };
