@@ -147,7 +147,9 @@ static inline void mcw_cxxamp_launch_kernel(size_t *ext,
       assert(err == CL_SUCCESS);
     }
   }
-
+  #if !CACHE_KERNEL_OBJECT
+  clReleaseKernel(kernel);
+  #endif
   // Release device lock if specified accelerator_view is automatically selected
   if (accl_view. get_is_auto_selection())
     aloc->releaseLock();

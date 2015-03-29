@@ -27,10 +27,15 @@
 #define __declspec(ignored) /* */
 #endif
 
+// Do not cache kernel object for now
+#define CACHE_KERNEL_OBJECT 0
+
 namespace Concurrency
 {
 namespace CLAMP {
+#if CACHE_KERNEL_OBJECT
 extern void ReleaseKernelObject();
+#endif
 }
 namespace details
 {
@@ -70,7 +75,10 @@ public:
   }
 
   ~DeviceManager() {
+    // Do not cache kernel object
+    #if CACHE_KERNEL_OBJECT
     CLAMP::ReleaseKernelObject();
+    #endif
     for(const auto& it : Clid2DimSizeMap)
      if(it.second.maxSizes)
       delete[] it.second.maxSizes;

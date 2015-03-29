@@ -69,7 +69,9 @@ std::vector<std::string> __mcw_kernel_names;
 namespace Concurrency {
 namespace CLAMP {
 typedef std::map<std::string, cl_kernel> KernelObject;
+#if CACHE_KERNEL_OBJECT
 std::map<cl_program, KernelObject> Pro2KernelObject;
+#endif
     static inline void getKernelNames(cl_program& prog) {
         std::vector<std::string> n;
         cl_uint kernel_num = 0;
@@ -81,21 +83,18 @@ std::map<cl_program, KernelObject> Pro2KernelObject;
             cl_kernel *kl = new cl_kernel[kernel_num];
             ret = clCreateKernelsInProgram(prog, kernel_num + 1, kl, &kernel_num);
             if (ret == CL_SUCCESS) {
+                #if CACHE_KERNEL_OBJECT
                 KernelObject& KO = Pro2KernelObject[prog];
+                #endif
                 std::map<std::string, std::string> aMap;
                 for (unsigned i = 0; i < unsigned(kernel_num); ++i) {
                     char s[1024] = { 0x0 };
                     size_t size;
                     ret = clGetKernelInfo(kl[i], CL_KERNEL_FUNCTION_NAME, 1024, s, &size);
                     n.push_back(std::string (s));
+                    #if CACHE_KERNEL_OBJECT
                     KO[std::string (s)] = kl[i];
-                    // Some analysis tool will post warnings about not releasing kernel object in time, 
-                    // for example, 
-                    //   Warning: Memory leak detected [Ref = 1, Handle = 0x12f1420]: Object created by clCreateKernelsInProgram
-                    //   Warning: Memory leak detected [Ref = 1, Handle = 0x12f17a0]: Object created by clCreateProgramWithBinary
-                    // However these won't be taken as memory leaks in here since all created kenrel objects 
-                    // will be released in ReleaseKernelObjects and the Ref count will be reset to 0
-                    #if 0
+                    #else
                     clReleaseKernel(kl[i]);
                     #endif
                 }
@@ -205,7 +204,14 @@ void MatchKernelNames(std::string& fixed_name) {
   return;
 }
 cl_kernel GetKernelObject(cl_program& prog, std::string& name) {
+  #if !CACHE_KERNEL_OBJECT
   assert (name.c_str());
+  cl_int err;
+  cl_kernel kernel;
+  kernel = clCreateKernel(prog, name.c_str(), &err);
+  assert(err == CL_SUCCESS);
+  return kernel;
+  #else
   KernelObject& KO = Pro2KernelObject[prog];
   if (KO[name] == 0) {
     cl_int err;
@@ -213,15 +219,16 @@ cl_kernel GetKernelObject(cl_program& prog, std::string& name) {
     assert(err == CL_SUCCESS);
   }
   return KO[name];
+  #endif
 }
+#if CACHE_KERNEL_OBJECT
 void ReleaseKernelObject() {
-  // FIXME: memory leak
-  return;
   for(const auto& it : Pro2KernelObject)
     for(const auto& itt : it.second) 
       if(itt.second)
         clReleaseKernel(itt.second);
 }
+#endif
 }
 }
 namespace Concurrency { namespace CLAMP {
@@ -370,7 +377,7 @@ namespace Concurrency { namespace CLAMP {
             free(kernel_source);
             // FIXME: MatchKernelNames is temporarily commented out for better purpose
             // therefore no need to call the following
-            #if 1
+            #if 0
             getKernelNames(program);
             #endif
 #endif
