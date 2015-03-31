@@ -24,8 +24,38 @@ LLVM_BIN=@HSAIL_BIN@
 # Path to HSAILASM
 HSAIL_ASM=@HSAIL_COMPILER@
 $LLVM_BIN/llvm-link -prelink-opt -o $1.linked.bc $1 -l $AMD_BUILTINS/builtins-hsail.bc
+
+KMDUMPLLVM="${KMDUMPLLVM:=0}"
+KMDUMPBRIG="${KMDUMPBRIG:=0}"
+KMLLCOPT="${KMLLCOPT:=""}"
+
+if [ $KMDUMPLLVM == "1" ]
+then
+  cp $1.linked.bc ./dump.linked.bc
+fi
+
 $LLVM_BIN/opt -O3 -gpu -whole -verify $1.linked.bc -o $1.opt.bc
-$LLVM_BIN/llc -O2 -march=hsail-64 -filetype=obj -o $1.brig $1.opt.bc
+
+if [ $KMDUMPLLVM == "1" ]
+then
+  cp $1.opt.bc ./dump.opt.bc
+fi
+
+$LLVM_BIN/llc -O2 -march=hsail-64 -filetype=obj $KMLLCOPT -o $1.brig $1.opt.bc
+
+if [ $KMDUMPBRIG == "1" ]
+then
+    cp $1.brig ./dump.brig
+fi
+
 $HSAIL_ASM -disassemble -o $1.hsail $1.brig
 cat $NEWLIB/new_delete.hsail >> $1.hsail
 $HSAIL_ASM -assemble -o $1.brig $1.hsail
+
+if [ $KMDUMPBRIG == "1" ] 
+then
+  cp $1.brig ./dump.new_delete.brig
+fi
+
+
+
