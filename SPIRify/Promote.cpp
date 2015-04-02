@@ -474,7 +474,8 @@ StructType* mapTypeToGlobal(StructType* T) {
 
 ArrayType * mapTypeToGlobal ( ArrayType * T )
 {
-        return T;
+        Type* translatedType = mapTypeToGlobal(T->getElementType());
+        return ArrayType::get(translatedType, T->getNumElements());
 }
 
 PointerType * mapTypeToGlobal ( PointerType * PT )
