@@ -214,7 +214,6 @@ struct AMPAllocator
       }
     }
     bool tryMoveTo(Serialize& s, void* data) {
-      #ifdef TRANSPARENT_DATA_MANAGEMENT
       auto it = rwq.find(data);
       cl_device_id target = s.getDevice();
       if (target != device && it!=std::end(rwq)) {
@@ -256,7 +255,6 @@ struct AMPAllocator
         free(data);
         return true;
       }
-    #endif
       return false;
     }
     ~AMPAllocator() {
@@ -347,11 +345,9 @@ struct mm_info
       getAllocator(_device_id)->discard(data);
     }
     void serialize(Serialize& s) {
-      #ifdef TRANSPARENT_DATA_MANAGEMENT
       if (getAllocator(_device_id)->tryMoveTo(s, data)) {
         _device_id = s.getDevice();
       }
-      #endif
       getAllocator(_device_id)->append(s, data);
     }
     ~mm_info() {
