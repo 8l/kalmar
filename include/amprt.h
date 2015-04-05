@@ -121,7 +121,6 @@ public:
     return NULL;
   }
 #endif
-  // TODO: shall returned pre-created accelerators
   cl_device_id getAvailableDevice()
   {
     cl_device_id did = NULL;

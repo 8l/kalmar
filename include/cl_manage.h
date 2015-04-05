@@ -78,9 +78,6 @@ struct AMPAllocator
         if (result != 0)
           perror("getsched self error!\n");
         int self_prio = param.sched_priority;
-        #if 0
-        printf("self=%d, self_prio = %d,  max = %d\n", (int)self, self_prio, max_prio);
-        #endif
         for (int qid = 0; qid < QUEUE_SIZE; qid++) {
           #define CL_QUEUE_THREAD_HANDLE_AMD 0x403E
           #define PRIORITY_OFFSET 2
@@ -93,9 +90,6 @@ struct AMPAllocator
             if (result != 0)
               perror("getsched q error!\n");
             int que_prio = param.sched_priority;
-            #if 0
-            printf("que=%d, que_prio = %d\n", (int)thId, que_prio);
-            #endif
             // Strategy to renew the que thread's priority, the smaller the highest
             if (max_prio == que_prio) {
               // perfect. Do nothing
@@ -144,14 +138,8 @@ struct AMPAllocator
 #endif
                 assert(err == CL_SUCCESS);
                 mem_info[data] = {dm, 1};
-                #if SYNC_DEBUG
-                printf("init data=%p, device=%p, count=%d\n", data, dm, count);
-                #endif
             }
         } else {
-            #if SYNC_DEBUG
-            printf("retain data=%p, device=%p, count=%d\n", data, iter->second.dm,count);
-            #endif
             ++iter->second.refCount;
           }
     }
@@ -171,9 +159,6 @@ struct AMPAllocator
     void discard(void* data) {
       auto it = rwq.find(data);
       if (it != std::end(rwq)) {
-        #ifdef SYNC_DEBUG
-        printf("discard data %p\n", data);
-        #endif
         it->second.discard = true;
       }
     }
@@ -186,9 +171,6 @@ struct AMPAllocator
         // (2) if not dicarded by users
         // (3) if device data is still valid
         if (rw.used && !rw.discard && !rw.ready_to_read) {
-          #ifdef SYNC_DEBUG
-          printf("sync write from host %p, device %p\n", it.first, mem_info[it.first].dm);
-          #endif
           err = clEnqueueWriteBuffer(getQueue(), mem_info[it.first].dm, CL_TRUE, 0,
                                      rw.count, it.first, 0, NULL, NULL);
           assert(err == CL_SUCCESS);
@@ -220,9 +202,6 @@ struct AMPAllocator
       for (auto& it : rwq) {
         rw_info& rw = it.second;
         if (rw.used) {
-          #ifdef SYNC_DEBUG
-          printf("need read host %p, device %p\n", it.first, mem_info[it.first].dm);
-          #endif
           rw.ready_to_read = true;
           rw.dm = mem_info[it.first].dm;
         }
@@ -232,9 +211,6 @@ struct AMPAllocator
     void free(void *data) {
       auto iter = mem_info.find(data);
       if (iter != std::end(mem_info) && --iter->second.refCount == 0) {
-        #ifdef SYNC_DEBUG
-        printf("Release mem data=%p, dm=%p\n", data, iter->second.dm);
-        #endif
         clReleaseMemObject(iter->second.dm);
         mem_info.erase(iter);
         #if CXXAMP_NV
@@ -368,9 +344,6 @@ struct mm_info
           // (2) if device data is validated
           // (3) if is the interested host pointer
           if (rw.used && rw.ready_to_read && it.first == data) {
-            #ifdef SYNC_DEBUG
-            printf("sync read back to host=%p, device=%p, count=%d\n\n",data, rw.dm, rw.count);
-            #endif
             err = clEnqueueReadBuffer(getAllocator(_device_id)->getQueue(), rw.dm, CL_TRUE, 0,
                                       rw.count, data, 0, NULL, NULL);
             assert(err == CL_SUCCESS);
@@ -390,10 +363,6 @@ struct mm_info
       #endif
     }
     void serialize(Serialize& s) {
-      #ifdef SYNC_DEBUG
-      printf("serialize, data=%p\n",data);
-      #endif
-
       #ifdef TRANSPARENT_DATA_MANAGEMENT
       if (getAllocator(_device_id)->tryMoveTo(s, data)) {
         _device_id = s.getDevice();

@@ -1377,15 +1377,6 @@ public:
       throw runtime_exception(__errorMsg_UnsupportedAccelerator, E_FAIL);
     }    
 */
-#if 0
-    if (!m_arr)
-      return;
-    array<T, N>* arr = static_cast<array<T, N>* >(m_arr);
-    cl_device_id device = arr->get_accelerator_view().get_accelerator().get_device_id();
-    assert(Concurrency::getAllocator(device));
-    // User get() to avoid sync
-    Concurrency::getAllocator(device)->tryMoveTo(s, arr->get());
-#endif
   }
 private:
   void* m_arr;
@@ -1802,16 +1793,6 @@ public:
 
   __attribute__((annotate("serialize")))
   void __cxxamp_serialize(Serialize& s) const {
-#if 0
-    if (!Container)
-      return;
-    _Type* self = static_cast<_Type*>(Container);
-    // Current device
-    cl_device_id device = self->get_source_accelerator_view().get_accelerator().get_device_id();
-    // Use get() to avoid sync
-    assert(Concurrency::getAllocator(device));
-    Concurrency::getAllocator(device)->tryMoveTo(s, self->get());
-#endif
   }
 
 private:
@@ -1952,7 +1933,6 @@ public:
   typename projection_helper<T, N>::result_type
       operator[] (int i) const restrict(amp,cpu) {
 #ifndef __GPU__
-      // FIXME a LOT of synchronize() calls would happen here
       // Access to any element of it will force synchronizaiton
       synchronize();
 #endif
