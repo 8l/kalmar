@@ -13,7 +13,6 @@
 #include <string.h>
 #include <CL/opencl.h>
 
-#if defined(CXXAMP_NV)
 struct rw_info
 {
     int count; // amount in bytes
@@ -22,7 +21,6 @@ struct rw_info
     bool ready_to_read;
     cl_mem dm;
 };
-#endif
 struct amp_obj
 {
     cl_mem dm;
@@ -130,7 +128,8 @@ struct AMPAllocator
         if (iter == std::end(mem_info)) {
             if (count > 0) {
                 cl_int err;
-#if defined(CXXAMP_NV)
+// DMA version is default
+#if 1
                 cl_mem dm = clCreateBuffer(context, CL_MEM_READ_WRITE, count, NULL, &err);
                 rwq[data] = {count, false, false, false, NULL};
 #else
@@ -147,11 +146,8 @@ struct AMPAllocator
         if (mem_info[data].dm == NULL)
           return;
         s.Append(sizeof(cl_mem), &mem_info[data].dm);
-#if defined(CXXAMP_NV)
         rwq[data].used = true;
-#endif
     }
-#if defined(CXXAMP_NV)
     std::map<void *, rw_info>& synchronize(){
       return rwq;
     }
@@ -207,17 +203,14 @@ struct AMPAllocator
         }
       }
     }
-#endif
     void free(void *data) {
       auto iter = mem_info.find(data);
       if (iter != std::end(mem_info) && --iter->second.refCount == 0) {
         clReleaseMemObject(iter->second.dm);
         mem_info.erase(iter);
-        #if CXXAMP_NV
         auto it = rwq.find(data);
         if (it != std::end(rwq))
           rwq.erase(it);
-        #endif
       }
     }
     bool tryMoveTo(Serialize& s, void* data) {
@@ -301,16 +294,11 @@ struct AMPAllocator
     cl_command_queue queue[QUEUE_SIZE];
     int              queue_id;
     cl_program       program;
-#if defined(CXXAMP_NV)
     std::map<void *, rw_info> rwq;
-#endif
     int m_maxCommandQueuePerDevice;
 };
-
-#if defined(CXXAMP_NV)
 void* getDevicePointer(void* data);
 cl_command_queue getOCLQueue(void* device_ptr);
-#endif
 struct mm_info
 {
     std::vector<cl_kernel> serializedKernel;
@@ -333,7 +321,6 @@ struct mm_info
       getAllocator(_device_id)->init(data, count);
     }
     void synchronize() {
-      #if CXXAMP_NV
       std::map<void *, rw_info> &rwq = getAllocator(_device_id)->synchronize();
       {
         cl_int err;
@@ -352,15 +339,12 @@ struct mm_info
           }
         }
       }
-      #endif
     }
     void refresh() {}
     void* get() { return data; }
     void disc() {
       discard = true;
-      #if CXXAMP_NV
       getAllocator(_device_id)->discard(data);
-      #endif
     }
     void serialize(Serialize& s) {
       #ifdef TRANSPARENT_DATA_MANAGEMENT

@@ -129,9 +129,7 @@ static inline void mcw_cxxamp_launch_kernel(size_t *ext,
           local_size = NULL;
   }
 
-#if defined(CXXAMP_NV)
   aloc->write();
-#endif
   cl_event kn_event;
   cl_command_queue queue = aloc->getQueue();
   err = clEnqueueNDRangeKernel( queue, kernel, dim_ext, NULL, ext, local_size, 0, NULL, &kn_event);
@@ -154,9 +152,7 @@ static inline void mcw_cxxamp_launch_kernel(size_t *ext,
   if (accl_view. get_is_auto_selection())
     aloc->releaseLock();
 
-  #if defined(CXXAMP_NV)
   aloc->read();
-  #endif
 #endif //CXXAMP_ENABLE_HSA
 #endif // __GPU__
 }

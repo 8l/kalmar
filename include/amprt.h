@@ -102,7 +102,6 @@ public:
     printf("No such device, id = %p, exit\n", id);
     exit(1);
   }
-#if defined(CXXAMP_NV)
   void* getDevicePointer(void* data) {
     for (auto &it: m_allocators) {
       AMPAllocator* amp = it.second;
@@ -120,7 +119,6 @@ public:
     }
     return NULL;
   }
-#endif
   cl_device_id getAvailableDevice()
   {
     cl_device_id did = NULL;
