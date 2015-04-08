@@ -52,6 +52,7 @@ struct rw_info
 {
     int count;
     bool used;
+    bool discard;
 };
 
 struct DimMaxSize {
@@ -115,7 +116,7 @@ public:
         if (count > 0) {
             cl_int err;
             cl_mem dm = clCreateBuffer(context, CL_MEM_READ_WRITE, count, NULL, &err);
-            rwq[data] = {count, false};
+            rwq[data] = {count, false, false};
             assert(err == CL_SUCCESS);
             mem_info[data] = dm;
         }
@@ -128,12 +129,18 @@ public:
         cl_int err;
         for (auto& it : rwq) {
             rw_info& rw = it.second;
-            if (rw.used) {
+            if (rw.used && !rw.discard) {
                 err = clEnqueueWriteBuffer(queue, mem_info[it.first], CL_TRUE, 0,
                                            rw.count, it.first, 0, NULL, NULL);
                 assert(err == CL_SUCCESS);
-            }
+            } else
+                rw.discard = false;
         }
+    }
+    void discard(void *data) {
+        auto it = rwq.find(data);
+        if (it != std::end(rwq))
+            it->second.discard = true;
     }
     void* device_data(void* data) {
         auto it = rwq.find(data);
@@ -160,6 +167,9 @@ public:
             clReleaseMemObject(iter->second);
             mem_info.erase(iter);
         }
+        auto it = rwq.find(data);
+        if (it != std::end(rwq))
+            rwq.erase(it);
     }
     ~OpenCLAMPAllocator() {
         clReleaseProgram(program);

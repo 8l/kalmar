@@ -43,6 +43,7 @@ public:
     }
   }
   void *device_data(void *) { return nullptr; }
+  void discard(void *) {}
   void read() {
     for (auto& it : rwq) {
       rw_info& rw = it.second;

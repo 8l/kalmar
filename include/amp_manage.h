@@ -48,7 +48,7 @@ struct mm_info
     void synchronize() {}
     void refresh() {}
     void* get() { return data; }
-    void disc() {}
+    void disc() { getAllocator()->discard(data); }
     void serialize(Serialize& s) {
       getAllocator()->append(s.getKernel(), s.getAndIncCurrentIndex(), data);
     }
