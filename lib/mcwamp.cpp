@@ -8,6 +8,7 @@
 #include <amp.h>
 #include <map>
 #include <CL/opencl.h>
+#include <amprt.h>
 
 #include <md5.h>
 #include <sstream>
@@ -20,24 +21,38 @@ namespace Concurrency {
 const wchar_t accelerator::gpu_accelerator[] = L"gpu";
 const wchar_t accelerator::cpu_accelerator[] = L"cpu";
 const wchar_t accelerator::default_accelerator[] = L"default";
-
+#if defined(CXXAMP_ENABLE_HSA)
 std::shared_ptr<accelerator> accelerator::_gpu_accelerator = std::make_shared<accelerator>(accelerator::gpu_accelerator);
+#endif
 std::shared_ptr<accelerator> accelerator::_cpu_accelerator = std::make_shared<accelerator>(accelerator::cpu_accelerator);
-std::shared_ptr<accelerator> accelerator::_default_accelerator = nullptr;
+std::shared_ptr<accelerator> accelerator::_default_accelerator = std::make_shared<accelerator>(L"gpu0");
 
+std::vector<accelerator> accelerator::_accs;
+cl_device_id details::DeviceManager::starting_id = NULL;
 std::map<cl_device_id, struct DimMaxSize> Clid2DimSizeMap;
-AMPAllocator& getAllocator()
+static details::DeviceManager DeviceMgr;
+AMPAllocator* getAllocator(cl_device_id id)
 {
-    static AMPAllocator amp;
-    return amp;
+  return DeviceMgr.getAllocator(id);
 }
-
+namespace CLAMP {
+cl_device_id getAvailableAccelerator()
+{
+  return DeviceMgr.getAvailableDevice();
+}
+}
+void* getDevicePointer(void* data) {
+  return DeviceMgr.getDevicePointer(data);
+}
+cl_command_queue getOCLQueue(void* device_ptr) {
+  return DeviceMgr.getOCLQueue(device_ptr);
+}
 std::map<cl_kernel, std::vector<cl_event> > kernelEventMap;
 //int mm_info::waitOnKernelsCount = 0;
 } // namespace Concurrency
 
 namespace {
-bool __mcw_cxxamp_compiled = false;
+std::map<cl_device_id, bool>__mcw_cxxamp_compiled;
 }
 
 #ifdef __APPLE__
@@ -51,24 +66,10 @@ extern "C" char * kernel_source_end_[] asm ("_binary_kernel_cl_end");
 std::vector<std::string> __mcw_kernel_names;
 namespace Concurrency {
 namespace CLAMP {
-void AddKernelEventObject(cl_kernel kernel, cl_event event) {
-    //printf("AddKernelEventObject %p %p\n", kernel, event);
-    kernelEventMap[kernel].push_back(event);
-    //printf("kernel events: %lu\n", kernelEventMap[kernel].size());
-}
-
-std::vector<cl_event>& GetKernelEventObject(cl_kernel kernel) {
-    //printf("GetKernelEventObject %p\n", kernel);
-    return kernelEventMap[kernel];
-}
-
-void RemoveKernelEventObject(cl_kernel kernel) {
-    //printf("RemoveKernelEventObject %p\n", kernel);
-    kernelEventMap.erase(kernel);
-}
-
 typedef std::map<std::string, cl_kernel> KernelObject;
+#if CACHE_KERNEL_OBJECT
 std::map<cl_program, KernelObject> Pro2KernelObject;
+#endif
     static inline void getKernelNames(cl_program& prog) {
         std::vector<std::string> n;
         cl_uint kernel_num = 0;
@@ -80,21 +81,18 @@ std::map<cl_program, KernelObject> Pro2KernelObject;
             cl_kernel *kl = new cl_kernel[kernel_num];
             ret = clCreateKernelsInProgram(prog, kernel_num + 1, kl, &kernel_num);
             if (ret == CL_SUCCESS) {
+                #if CACHE_KERNEL_OBJECT
                 KernelObject& KO = Pro2KernelObject[prog];
+                #endif
                 std::map<std::string, std::string> aMap;
                 for (unsigned i = 0; i < unsigned(kernel_num); ++i) {
                     char s[1024] = { 0x0 };
                     size_t size;
                     ret = clGetKernelInfo(kl[i], CL_KERNEL_FUNCTION_NAME, 1024, s, &size);
                     n.push_back(std::string (s));
+                    #if CACHE_KERNEL_OBJECT
                     KO[std::string (s)] = kl[i];
-                    // Some analysis tool will post warnings about not releasing kernel object in time, 
-                    // for example, 
-                    //   Warning: Memory leak detected [Ref = 1, Handle = 0x12f1420]: Object created by clCreateKernelsInProgram
-                    //   Warning: Memory leak detected [Ref = 1, Handle = 0x12f17a0]: Object created by clCreateProgramWithBinary
-                    // However these won't be taken as memory leaks in here since all created kenrel objects 
-                    // will be released in ReleaseKernelObjects and the Ref count will be reset to 0
-                    #if 0
+                    #else
                     clReleaseKernel(kl[i]);
                     #endif
                 }
@@ -204,7 +202,14 @@ void MatchKernelNames(std::string& fixed_name) {
   return;
 }
 cl_kernel GetKernelObject(cl_program& prog, std::string& name) {
+  #if !CACHE_KERNEL_OBJECT
   assert (name.c_str());
+  cl_int err;
+  cl_kernel kernel;
+  kernel = clCreateKernel(prog, name.c_str(), &err);
+  assert(err == CL_SUCCESS);
+  return kernel;
+  #else
   KernelObject& KO = Pro2KernelObject[prog];
   if (KO[name] == 0) {
     cl_int err;
@@ -212,13 +217,16 @@ cl_kernel GetKernelObject(cl_program& prog, std::string& name) {
     assert(err == CL_SUCCESS);
   }
   return KO[name];
+  #endif
 }
+#if CACHE_KERNEL_OBJECT
 void ReleaseKernelObject() {
   for(const auto& it : Pro2KernelObject)
     for(const auto& itt : it.second) 
       if(itt.second)
         clReleaseKernel(itt.second);
 }
+#endif
 }
 }
 namespace Concurrency { namespace CLAMP {
@@ -228,7 +236,7 @@ namespace Concurrency { namespace CLAMP {
         assert(0 && "Unsupported function");
 #else
         cl_int err;
-        if (!__mcw_cxxamp_compiled) {
+        if (!__mcw_cxxamp_compiled[device]) {
 #ifdef __APPLE__
             const struct section_64 *sect = getsectbyname("binary", "kernel_cl");
             unsigned char *kernel_source = (unsigned char*)calloc(1, sect->size+1);
@@ -363,11 +371,11 @@ namespace Concurrency { namespace CLAMP {
 
             } // if (precompiled_kernel) 
 
-            __mcw_cxxamp_compiled = true;
+            __mcw_cxxamp_compiled[device] = true;
             free(kernel_source);
             // FIXME: MatchKernelNames is temporarily commented out for better purpose
             // therefore no need to call the following
-            #if 1
+            #if 0
             getKernelNames(program);
             #endif
 #endif

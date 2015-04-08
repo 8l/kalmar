@@ -13,38 +13,30 @@
 #include <string.h>
 #include <CL/opencl.h>
 
-#define CXXAMP_SYNC (1)
-
-#if defined(CXXAMP_NV)
 struct rw_info
 {
-    int count;
+    int count; // amount in bytes
     bool used;
     bool discard;
     bool ready_to_read;
     cl_mem dm;
 };
-#endif
 struct amp_obj
 {
     cl_mem dm;
-    int count;
+    int refCount;// reference count
 };
 
-#define QUEUE_SIZE (2)
+#define QUEUE_SIZE (1)
 
 struct DimMaxSize {
   cl_uint dimensions;
   size_t* maxSizes;
 };
 extern std::map<cl_device_id, struct DimMaxSize> Clid2DimSizeMap;
-namespace CLAMP {
-extern void ReleaseKernelObject();
-extern void AddKernelEventObject(cl_kernel, cl_event);
-extern std::vector<cl_event>& GetKernelEventObject(cl_kernel);
-extern void RemoveKernelEventObject(cl_kernel);
-}
-
+// Forward declaration
+struct AMPAllocator;
+AMPAllocator* getAllocator(cl_device_id id);
 struct AMPAllocator
 {
     inline cl_command_queue getQueue() {
@@ -54,25 +46,10 @@ struct AMPAllocator
         return ret;
     }
 
-    AMPAllocator() {
-        cl_uint          num_platforms;
-        cl_int           err;
-        cl_platform_id   platform_id[10];
+    AMPAllocator(cl_device_id a_device)
+      : device(a_device), program(NULL), m_maxCommandQueuePerDevice(QUEUE_SIZE) {
         int i;
-        err = clGetPlatformIDs(10, platform_id, &num_platforms);
-        for (i = 0; i < num_platforms; i++) {
-            err = clGetDeviceIDs(platform_id[i], CL_DEVICE_TYPE_GPU, 1, &device, NULL);
-            if (err == CL_SUCCESS)
-                break;
-        }
-        if (err != CL_SUCCESS) {
-            for (i = 0; i < num_platforms; i++) {
-                err = clGetDeviceIDs(platform_id[i], CL_DEVICE_TYPE_CPU, 1, &device, NULL);
-                if (err == CL_SUCCESS)
-                    break;
-            }
-        }
-        assert(err == CL_SUCCESS);
+        cl_int           err;
         context = clCreateContext(0, 1, &device, NULL, NULL, &err);
         assert(err == CL_SUCCESS);
         for (i = 0; i < QUEUE_SIZE; ++i) {
@@ -99,9 +76,6 @@ struct AMPAllocator
         if (result != 0)
           perror("getsched self error!\n");
         int self_prio = param.sched_priority;
-        #if 0
-        printf("self=%d, self_prio = %d,  max = %d\n", (int)self, self_prio, max_prio);
-        #endif
         for (int qid = 0; qid < QUEUE_SIZE; qid++) {
           #define CL_QUEUE_THREAD_HANDLE_AMD 0x403E
           #define PRIORITY_OFFSET 2
@@ -114,9 +88,6 @@ struct AMPAllocator
             if (result != 0)
               perror("getsched q error!\n");
             int que_prio = param.sched_priority;
-            #if 0
-            printf("que=%d, que_prio = %d\n", (int)thId, que_prio);
-            #endif
             // Strategy to renew the que thread's priority, the smaller the highest
             if (max_prio == que_prio) {
               // perfect. Do nothing
@@ -149,13 +120,16 @@ struct AMPAllocator
       d.dimensions = dimensions;
       d.maxSizes = maxSizes;
       Clid2DimSizeMap[device] = d;
+
+      resetLock();
     }
     void init(void *data, int count) {
         auto iter = mem_info.find(data);
         if (iter == std::end(mem_info)) {
             if (count > 0) {
                 cl_int err;
-#if defined(CXXAMP_NV)
+// DMA version is default
+#if 1
                 cl_mem dm = clCreateBuffer(context, CL_MEM_READ_WRITE, count, NULL, &err);
                 rwq[data] = {count, false, false, false, NULL};
 #else
@@ -163,24 +137,17 @@ struct AMPAllocator
 #endif
                 assert(err == CL_SUCCESS);
                 mem_info[data] = {dm, 1};
-                #if SYNC_DEBUG
-                printf("init data=%p, device=%p, count=%d\n", data, dm, count);
-                #endif
             }
         } else {
-            #if SYNC_DEBUG
-            printf("retain data=%p, device=%p, count=%d\n", data, iter->second.dm,count);
-            #endif
-            ++iter->second.count;
+            ++iter->second.refCount;
           }
     }
     void append(Serialize& s, void *data) {
+        if (mem_info[data].dm == NULL)
+          return;
         s.Append(sizeof(cl_mem), &mem_info[data].dm);
-#if defined(CXXAMP_NV)
         rwq[data].used = true;
-#endif
     }
-#if defined(CXXAMP_NV)
     std::map<void *, rw_info>& synchronize(){
       return rwq;
     }
@@ -188,9 +155,6 @@ struct AMPAllocator
     void discard(void* data) {
       auto it = rwq.find(data);
       if (it != std::end(rwq)) {
-        #ifdef SYNC_DEBUG
-        printf("discard data %p\n", data);
-        #endif
         it->second.discard = true;
       }
     }
@@ -203,9 +167,6 @@ struct AMPAllocator
         // (2) if not dicarded by users
         // (3) if device data is still valid
         if (rw.used && !rw.discard && !rw.ready_to_read) {
-          #ifdef SYNC_DEBUG
-          printf("sync write from host %p, device %p\n", it.first, mem_info[it.first].dm);
-          #endif
           err = clEnqueueWriteBuffer(getQueue(), mem_info[it.first].dm, CL_TRUE, 0,
                                      rw.count, it.first, 0, NULL, NULL);
           assert(err == CL_SUCCESS);
@@ -214,65 +175,128 @@ struct AMPAllocator
     }
     // Used in Concurrency::copy
     void* device_data(void* data) {
+      if (!data)
+        return NULL;
       auto it = rwq.find(data);
       if (it != std::end(rwq)) {
         return mem_info[data].dm;
       }
       return NULL;
     }
+    // Determine if the device_ptr is allocated on assocated accelerator or not
+    bool isAllocated(void* device_ptr) {
+      if (!device_ptr)
+        return false;
+      for (auto &it: rwq) {
+        // Reverse lookup of the map
+        if(device_ptr == mem_info[it.first].dm)
+          return true;
+      }
+      return false;
+    }
     void read() {
       for (auto& it : rwq) {
         rw_info& rw = it.second;
         if (rw.used) {
-          #ifdef SYNC_DEBUG
-          printf("need read host %p, device %p\n", it.first, mem_info[it.first].dm);
-          #endif
           rw.ready_to_read = true;
           rw.dm = mem_info[it.first].dm;
         }
       }
     }
-#endif
     void free(void *data) {
       auto iter = mem_info.find(data);
-      if (iter != std::end(mem_info) && --iter->second.count == 0) {
-        #ifdef SYNC_DEBUG
-        printf("Release mem data=%p, dm=%p\n", data, iter->second.dm);
-        #endif
+      if (iter != std::end(mem_info) && --iter->second.refCount == 0) {
         clReleaseMemObject(iter->second.dm);
         mem_info.erase(iter);
-        #if CXXAMP_NV
         auto it = rwq.find(data);
         if (it != std::end(rwq))
           rwq.erase(it);
-        #endif
       }
     }
+    bool tryMoveTo(Serialize& s, void* data) {
+      auto it = rwq.find(data);
+      cl_device_id target = s.getDevice();
+      if (target != device && it!=std::end(rwq)) {
+        rw_info& rw = it->second;
+        int count = rw.count;
+        // peer to peer happens here
+        // (1) Get target AMPAllocator
+        AMPAllocator* DestAllocator = Concurrency::getAllocator(target);
+        assert(DestAllocator);
+        // Create new clBuffer in target AMPAllocator
+        DestAllocator->init(data, count);
+
+        // Copy from resident to target
+        // TODO: Will replace with peer-to-peer copy routine
+        {
+          // (1) gpuMemcpyDeviceToHost
+          cl_int err;
+          void* srcDevicePointer = device_data(data);
+          err = clEnqueueReadBuffer(getQueue(),
+                                    static_cast<cl_mem>(srcDevicePointer), CL_TRUE, 0,
+                                    count, data, 0, NULL, NULL);
+          if (err != CL_SUCCESS) {
+            printf("Read error = %d\n", err);
+            exit(1);
+          }
+          // (2) gpuMemcpyHostToDevice
+          void* destDevicePointer = DestAllocator->device_data(data);
+          err = clEnqueueWriteBuffer(DestAllocator->getQueue(),
+                                     static_cast<cl_mem>(destDevicePointer), CL_TRUE, 0,
+                                     count, data, 0, NULL, NULL);
+          if (err != CL_SUCCESS) {
+            printf("Write error = %d\n", err);
+            exit(1);
+          }
+          if (it->second.discard == true)
+            DestAllocator->discard(data);
+        }
+        // Free clBuffer in src AMPAllocator
+        free(data);
+        return true;
+      }
+      return false;
+    }
     ~AMPAllocator() {
-        clReleaseProgram(program);
+        if (program)
+          clReleaseProgram(program);
         for (int i = 0; i < QUEUE_SIZE; ++i) {
           clReleaseCommandQueue(queue[i]);
         }
         clReleaseContext(context);
-        for(const auto& it : Clid2DimSizeMap)
-          if(it.second.maxSizes)
-            delete[] it.second.maxSizes;
-        // Release all kernel objects associated with 'program'
-        CLAMP::ReleaseKernelObject();
     }
+    bool tryLock() {
+      int old_val = m_atomicLock.fetch_add(1);
+      if ((old_val+1) <= m_maxCommandQueuePerDevice) {
+        return true;
+      } else {
+        m_atomicLock.fetch_sub(1);
+        return false;
+      }
+    }
+    void releaseLock() {
+      int old_val = m_atomicLock.fetch_sub(1);
+      if( old_val < 1 || old_val > m_maxCommandQueuePerDevice) {
+        printf("releaseLock error!\n");
+        exit(1);
+      }
+    }
+    void resetLock() {
+      m_atomicLock.store(0);
+    }
+    // FIXME: Position matters
+    std::atomic<int> m_atomicLock;
     std::map<void *, amp_obj> mem_info;
     cl_context       context;
     cl_device_id     device;
     cl_command_queue queue[QUEUE_SIZE];
     int              queue_id;
     cl_program       program;
-#if defined(CXXAMP_NV)
     std::map<void *, rw_info> rwq;
-#endif
+    int m_maxCommandQueuePerDevice;
 };
-
-AMPAllocator& getAllocator();
-
+void* getDevicePointer(void* data);
+cl_command_queue getOCLQueue(void* device_ptr);
 struct mm_info
 {
     std::vector<cl_kernel> serializedKernel;
@@ -280,14 +304,22 @@ struct mm_info
     bool discard;
     bool sync;
     bool free;
-    //static int waitOnKernelsCount;
-    mm_info(int count)
-      : data(aligned_alloc(0x1000, count)), discard(false), free(true) { getAllocator().init(data, count); }
-    mm_info(int count, void *src)
-      : data(src), discard(false), free(false) { getAllocator().init(data, count); }
+    bool has_data_source;
+    cl_device_id _device_id;
+    mm_info(int count, cl_device_id device_id)
+      : data(aligned_alloc(0x1000, count)), discard(false), free(true),
+        has_data_source(false), _device_id(device_id) {
+      assert(device_id);
+      getAllocator(_device_id)->init(data, count);
+    }
+    mm_info(int count, void *src, cl_device_id device_id)
+      : data(src), discard(false), free(false),
+        has_data_source(true), _device_id(device_id) {
+      assert(device_id);
+      getAllocator(_device_id)->init(data, count);
+    }
     void synchronize() {
-      #if CXXAMP_NV
-      std::map<void *, rw_info> &rwq = getAllocator().synchronize();
+      std::map<void *, rw_info> &rwq = getAllocator(_device_id)->synchronize();
       {
         cl_int err;
         for (auto& it : rwq) {
@@ -297,10 +329,7 @@ struct mm_info
           // (2) if device data is validated
           // (3) if is the interested host pointer
           if (rw.used && rw.ready_to_read && it.first == data) {
-            #ifdef SYNC_DEBUG
-            printf("sync read back to host=%p, device=%p, count=%d\n\n",data, rw.dm, rw.count);
-            #endif
-            err = clEnqueueReadBuffer(getAllocator().getQueue(), rw.dm, CL_TRUE, 0,
+            err = clEnqueueReadBuffer(getAllocator(_device_id)->getQueue(), rw.dm, CL_TRUE, 0,
                                       rw.count, data, 0, NULL, NULL);
             assert(err == CL_SUCCESS);
             rw.used = false;
@@ -308,55 +337,27 @@ struct mm_info
           }
         }
       }
-      #endif
-      //printf("mm_info::synchronize() : %d\n", ++waitOnKernelsCount);
-      waitOnKernels();
     }
     void refresh() {}
     void* get() { return data; }
     void disc() {
       discard = true;
-      #if CXXAMP_NV
-      getAllocator().discard(data);
-      #endif
+      getAllocator(_device_id)->discard(data);
     }
     void serialize(Serialize& s) {
-      #ifdef SYNC_DEBUG
-      printf("serialize, data=%p\n",data);
-      #endif
-      #if !CXXAMP_SYNC
-      serializedKernel.push_back(s.getKernel());
-      #endif
-      getAllocator().append(s, data);
+      if (getAllocator(_device_id)->tryMoveTo(s, data)) {
+        _device_id = s.getDevice();
+      }
+      getAllocator(_device_id)->append(s, data);
     }
     ~mm_info() {
-        //printf("mm_info::~mm_info() : %d\n", ++waitOnKernelsCount);
-      waitOnKernels();
       if (!discard)
         synchronize();
-      getAllocator().free(data);
+      getAllocator(_device_id)->free(data);
       //free = true;
-      if (0) {
+      if (!has_data_source) {
         ::operator delete(data);
       }
-    }
-    void waitOnKernels() {
-        #if !CXXAMP_SYNC
-        // for each kernel, check if it has been finished
-        std::for_each(serializedKernel.begin(), serializedKernel.end(), [](cl_kernel& k) {
-            // get cl_event associated with the kernel
-            std::vector<cl_event>& event_vector = CLAMP::GetKernelEventObject(k);
-            std::for_each(event_vector.begin(), event_vector.end(), [](cl_event& event) {
-                // wait for the event to be completed
-                clWaitForEvents(1, &event);
-
-                clReleaseEvent(event);
-            });
-
-            // wait done, can remove the event object
-            CLAMP::RemoveKernelEventObject(k);
-        });
-       #endif
     }
 };
 
@@ -365,17 +366,19 @@ template <typename T>
 class _data {
 public:
     _data() = delete;
-    _data(int count) {}
+    _data(int count, cl_device_id device_id) : _device_id(device_id) {}
     _data(const _data& d) restrict(cpu, amp)
-        : p_(d.p_) {}
+        : p_(d.p_), _device_id(d._device_id) {}
     template <typename U>
         _data(const _data<U>& d) restrict(cpu, amp)
-        : p_(reinterpret_cast<T *>(d.get())) {}
+        : p_(reinterpret_cast<T *>(d.get())), _device_id(d.device_id()) {}
     __attribute__((annotate("user_deserialize")))
         explicit _data(__global T* t) restrict(cpu, amp) { p_ = t; }
     __global T* get(void) const restrict(cpu, amp) { return p_; }
+    cl_device_id device_id() const { return _device_id; }
 private:
     __global T* p_;
+    cl_device_id _device_id; // Meaningless. The only reason is to make compilation happy
 };
 
 template <typename T>
@@ -383,10 +386,10 @@ class _data_host {
     std::shared_ptr<mm_info> mm;
     template <typename U> friend class _data_host;
 public:
-    _data_host(int count)
-        : mm(std::make_shared<mm_info>(count * sizeof(T))) {}
-    _data_host(int count, T* src)
-        : mm(std::make_shared<mm_info>(count * sizeof(T), src)) {}
+    _data_host(int count, cl_device_id device_id)
+        : mm(std::make_shared<mm_info>(count * sizeof(T), device_id)) {}
+    _data_host(int count, T* src, cl_device_id device_id)
+        : mm(std::make_shared<mm_info>(count * sizeof(T), src, device_id)) {}
     _data_host(const _data_host& other)
         : mm(other.mm) {}
     template <typename U>
@@ -396,7 +399,7 @@ public:
     void synchronize() const { mm->synchronize(); }
     void discard() const { mm->disc(); }
     void refresh() const { mm->refresh(); }
-
+    cl_device_id device_id() const { return mm->_device_id; }
     __attribute__((annotate("serialize")))
         void __cxxamp_serialize(Serialize& s) const {
             mm->serialize(s);
